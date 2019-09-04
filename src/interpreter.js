@@ -1,4 +1,4 @@
-import Walker from "../../Walker.js";
+import { Walker } from "./lib/Pratt.js";
 import Function from "./Function.js";
 import Class from "./Class.js";
 import RuntimeError from "./RuntimeError.js";
@@ -35,13 +35,42 @@ function isTruthy (value) {
     return true;
 }
 
-export default new Walker((stmt, expr) => {
-    stmt("function", (stmt, ctx, walkStmt, walkExpr) => {
+class LoxInterpreter extends Interpreter {
+    constructor () {
+        super(); 
+        
+        this.defineStatement("function", this.walkFunction);
+        this.defineStatement("class", this.walkClass);
+        this.defineStatement("variable", this.walkVariable);
+        this.defineStatement("expression", this.walkExpression);
+        this.defineStatement("return",this.walkReturn);
+        this.defineStatement("print", this.walkPrint);
+        this.defineStatement("if", this.walkIf);
+        this.defineStatement("while", this.walkWhile);
+        this.defineStatement("for", this.walkFor);
+        this.defineStatement("block", this.walkBlock);
+        this.defineStatement("blank", (stmt, ctx) => {});
+        this.defineExpression("binary", this.walkBinaryExpression);
+        this.defineExpression("unary", this.walkUnaryExpression);
+        this.defineExpression("grouping", (expr, ctx) => this.walkExpression(expr, ctx));
+        this.defineExpression("number", (expr, ctx) => Number(expr));
+        this.defineExpression("string", (expr, ctx) => String(expr));
+        this.defineExpression("boolean", (expr, ctx) => expr === "true");
+        this.defineExpression("member", this.walkMemberExpression);
+        this.defineExpression("computed", this.walkComputedExpression);
+        this.defineExpression("set", this.walkSetExpression);
+        this.defineExpression("computed-set", this.walkComputedSetExpression);
+        this.defineExpression("assignment", this.walkAssignmentExpression);
+        this.defineExpression("call", this.walkCallExpression);
+        this.defineExpression("identifier", (expr, ctx) => ctx.get(expr));
+        this.defineExpression("context", (expr, ctx) => ctx.get(expr));
+    }
+    walkFunction (stmt, ctx) {
         const { parameters, block, name } = stmt;
         const fn = new Function(parameters, block, ctx.scope);
         ctx.define(name, fn);
-    });
-    stmt("class", (stmt, ctx, walkStmt, walkExpr) => {
+    }
+    walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;
         const definitions = [];
         const parent = superClass ? ctx.get(superClass) : null;
@@ -62,161 +91,143 @@ export default new Walker((stmt, expr) => {
         const ctor = new Class(name, parent, definitions);
         
         ctx.define(name, ctor);
-    });
-    stmt("variable", (stmt, ctx, walkStmt, walkExpr) => {
+    }
+    walkVariable (stmt, ctx) {
         const { initialiser, name } = stmt;
-        const value = walkExpr(initialiser, ctx);
+        const value = this.walkExpression(initialiser, ctx);
         ctx.define(name, value);
-    });
-    stmt("expression", (stmt, ctx, walkStmt, walkExpr) => {
-        walkExpr(stmt, ctx);
-    });
-    stmt("return", (stmt, ctx, walkStmt, walkExpr) => {
-        ctx.return(walkExpr(stmt, ctx));
-    });
-    stmt("print", (stmt, ctx, walkStmt, walkExpr) => {
-        ctx.print(walkExpr(stmt, ctx));
-    });
-    stmt("if", (stmt, ctx, walkStmt, walkExpr) => {
+    }
+    walkReturn (stmt, ctx) {
+        ctx.return(this.walkExpression(stmt, ctx));
+    }
+    walkPrint (stmt, ctx) {
+        ctx.print(this.walkExpression(stmt, ctx));
+    }
+    walkIf (stmt, ctx) {
         const { condition, thenStatement, elseStatement } = stmt;
-        const test = walkExpr(condition, ctx);
+        const test = this.walkExpression(condition, ctx);
         const result = test ? thenStatement : elseStatement;
-        walkStmt(result, ctx);
-    });
-    stmt("while", (stmt, ctx, walkStmt, walkExpr) => {
+        this.walkStatement(result, ctx);
+    }
+    walkWhile (stmt, ctx) {
         const { condition, thenStatement } = stmt;
         ctx.push();
-        while (walkExpr(condition, ctx)) {
+        while (this.walkExpression(condition, ctx)) {
             ctx.push();
-            walkStmt(thenStatement, ctx);
+            this.walkStatement(thenStatement, ctx);
             ctx.pop();
             if (ctx.shouldReturn())
                 break;
         }
         ctx.pop();
-    });
-    stmt("for", (stmt, ctx, walkStmt, walkExpr) => {
+    }
+    walkFor (stmt, ctx) {
         const { setup, condition, step, thenStatement } = stmt;
 
         ctx.push();
-        walkStmt(setup, ctx);
+        this.walkStatement(setup, ctx);
 
-        while (walkExpr(condition, ctx)) {
+        while (this.walkExpression(condition, ctx)) {
             ctx.push();
-            walkStmt(thenStatement, ctx);
+            this.walkStatement(thenStatement, ctx);
             ctx.pop();
             if (ctx.shouldReturn())
                 break;
-            walkExpr(step, ctx);
+            this.walkExpression(step, ctx);
         }
         ctx.pop();
-    });
-    stmt("block", (stmt, ctx, walkStmt, walkExpr) => {
+    }
+    walkBlock (stmt, ctx) {
         ctx.push();
         for (const sub of stmt) {
-            walkStmt(sub, ctx);
+            this.walkStatement(sub, ctx);
             if (ctx.shouldReturn())
                 break;
         }
         ctx.pop();
-    });
-    stmt("blank", (stmt, ctx, walkStmt, walkExpr) => {});
-
-    expr("binary", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkBinaryExpression (expr, ctx) {
         const { operator, left, right } = expr;
 
-        const a = walkExpr(left, ctx);
+        const a = this.walkExpression(left, ctx);
         // both "or" and "and" are shortcircuit style operators
         switch (operator) {
             case "or": {
                     if (isTruthy(a)) return true;
-                    return walkExpr(right, ctx);
+                    return this.walkExpression(right, ctx);
                 }
             case "and": {
                     if (!isTruthy(a)) return false;
-                    return walkExpr(right, ctx);
+                    return this.walkExpression(right, ctx);
                 }
         }
 
-        const b = walkExpr(right, ctx);
+        const b = this.walkExpression(right, ctx);
         const method = binary.get(operator);
 
         assert(method, "Illegal operator");
 
         return method(a, b);
-        
-    });
-    expr("unary", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkUnaryExpression (expr, ctx) {
         const { operator, expression } = expr;
 
-        const a = walkExpr(expression, ctx);
+        const a = this.walkExpression(expression, ctx);
         const method = unary.get(operator);
 
         assert(method, "Illegal operator");
 
         return method(a);
-    });
-    expr("grouping", (expr, ctx, walkStmt, walkExpr) => {
-        return walkExpr(expr, ctx);
-    });
-    expr("number", (expr, ctx, walkStmt, walkExpr) => {
-        return Number(expr);
-    });
-    expr("string", (expr, ctx, walkStmt, walkExpr) => {
-        return String(expr);
-    });
-    expr("boolean", (expr, ctx, walkStmt, walkExpr) => {
-        return expr === "true";
-    });
-    expr("member", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkMemberExpression (expr, ctx) {
         const { left, name } = expr;
-        const inst = walkExpr(left, ctx);
+        const inst = this.walkExpression(left, ctx);
 
         assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
         return inst.get(name);
-    });
-    expr("computed", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkComputedExpression (expr, ctx) {
         const { left, expression } = expr;
-        const name = walkExpr(expression, ctx);
-        const inst = walkExpr(left, ctx);
+        const name = this.walkExpression(expression, ctx);
+        const inst = this.walkExpression(left, ctx);
 
         assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
         return inst.get(name);
-    });
-    expr("set", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkSetExpression (expr, ctx) {
         const { left, right, name } = expr;
-        const inst = walkExpr(left, ctx);
+        const inst = this.walkExpression(left, ctx);
 
         assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
-        const value = walkExpr(right, ctx);
+        const value = this.walkExpression(right, ctx);
         return inst.set(name, value);
-    });
-    expr("computed-set", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkComputedSetExpression (expr, ctx) {
         const { left, right, expression } = expr;
-        const name = walkExpr(expression, ctx);
-        const inst = walkExpr(left, ctx);
+        const name = this.walkExpression(expression, ctx);
+        const inst = this.walkExpression(left, ctx);
 
         assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
-        const value = walkExpr(right, ctx);
+        const value = this.walkExpression(right, ctx);
         return inst.set(name, value);
-    });
-    expr("assignment", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkAssignmentExpression (expr, ctx) {
         const { name, right } = expr;
-        const value = walkExpr(right, ctx);
+        const value = this.walkExpression(right, ctx);
 
         ctx.set(name, value);
 
         return value;
-    });
-    expr("call", (expr, ctx, walkStmt, walkExpr) => {
+    }
+    walkCallExpression (expr, ctx) {
         const { left, args } = expr;
-        const fn = walkExpr(left, ctx);
+        const fn = this.walkExpression(left, ctx);
 
-        const values = args.map(arg => walkExpr(arg, ctx));
+        const values = args.map(arg => this.walkExpression(arg, ctx));
 
         if (fn instanceof Function)
             return ctx.callFunction(fn, values, walkStmt);
@@ -226,18 +237,12 @@ export default new Walker((stmt, expr) => {
             const init = inst.get("init");
             
             if (init)
-                ctx.callFunction(init, args, walkStmt);
+                ctx.callFunction(init, args, this.walkStatement);
 
             return inst;
         }
 
         else
             throw new RuntimeError(`${fn} is not a function`);
-    });
-    expr("identifier", (expr, ctx, walkStmt, walkExpr) => {
-        return ctx.get(expr);
-    });
-    expr("context", (expr, ctx, walkStmt, walkExpr) => {
-        return ctx.get(expr);
-    });
-})
+    }
+}
