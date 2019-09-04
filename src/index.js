@@ -1,10 +1,13 @@
-import interpreter from "./interpreter.js";
-import parser from "./parser.js";
+import LoxInterpreter from "./LoxInterpreter";
+import LoxParser from "./LoxParser";
 import Context from "./Context.js";
 import NativeFunction from "./NativeFunction.js";
 
 function createIsolate (stdout, stderr) {
   const ctx = new Context;
+  const parser = new LoxParser;
+  const interpreter = new LoxInterpreter;
+
   ctx.printMethod = stdout;
   defineFunction(ctx, "clock", [], () => Date.now());
   ctx.define("nil", null);
@@ -12,7 +15,7 @@ function createIsolate (stdout, stderr) {
   return function (str) {
     try {
       const ast = parser.parseProgram(str);
-      for (const val of interpreter.walk(ast, ctx)) {}
+      interpreter.walk(ast, ctx);
     }
     catch (e) {
       stderr && stderr(e.message);
