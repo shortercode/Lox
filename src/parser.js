@@ -1,324 +1,365 @@
-import Parser from "../../Parser.js";
-import Node from "../../Node.js";
+import { Parser } from "../lib/Pratt.js";
 
-function parseBlock (tokens, parseStmt) {
-    const statements = [];
-    Parser.ensure(tokens, "symbol:{");
+class LoxParser extends Parser {
+    constructor () {
+        super();
+        this.addStatement("identifier:fun",     this.parseFunctionStmt);
+        this.addStatement("identifier:class",   this.parseClassStmt);
+        this.addStatement("identifier:var",     this.parseVarStmt);
+        this.addStatement("identifier:return",  this.parseReturnStmt);
+        this.addStatement("identifier:print",   this.parsePrintStmt);
+        this.addStatement("identifier:if",      this.parseIfStmt);
+        this.addStatement("identifier:while",   this.parseWhileStmt);
+        this.addStatement("identifier:for",     this.parseForStmt);
+        this.addStatement("symbol:{",           this.parseBlockStmt);
+        this.addStatement("symbol:;",           this.parseBlank);
 
-    while (!Parser.match(tokens, "symbol:}")) {
-        statements.push(parseStmt(tokens));
+        // sequence
+        this.addInfix("symbol:,",           1,  this.binary(","))
+        // assignment
+        this.addInfix("symbol:=",           2,  this.parseAssignentExpression);
+        // logical or
+        this.addInfix("identifier:or",      3,  this.binary("or"));
+        // logical and
+        this.addInfix("identifier:and",     4,  this.binary("and"));
+        // equality
+        this.addInfix("symbol:==",          5,  this.binary("=="));
+        this.addInfix("symbol:!=",          5,  this.binary("!="));
+        // comparison
+        this.addInfix("symbol:<",           6,  this.binary("<"));
+        this.addInfix("symbol:>",           6,  this.binary(">"));
+        this.addInfix("symbol:<=",          6,  this.binary("<="));
+        this.addInfix("symbol:>=",          6,  this.binary(">="));
+        // add/sub
+        this.addInfix("symbol:+",           7,  this.binary("+"));
+        this.addInfix("symbol:-",           7,  this.binary("-"));
+        // mult/div
+        this.addInfix("symbol:/",           8,  this.binary("/"));
+        this.addInfix("symbol:*",           8,  this.binary("*"));
+        // unary not
+        this.addPrefix("symbol:!",          9,  this.unary("!"));
+        // unary minus
+        this.addPrefix("symbol:-",          9,  this.unary("-"));
+        // call function
+        this.addInfix("symbol:(",           10, this.parseCallExpression);
+        // subscript ( computed member )
+        this.addInfix("symbol:[",           10, this.parseSubscriptExpression)
+        // member
+        this.addInfix("symbol:.",           10, this.parseMemberExpression)
+        // grouping
+        this.addPrefix("symbol:(",          11, this.parseMemberExpression)
+
+        this.addPrefix("number:",           12, this.literal("number"));
+        this.addPrefix("string:",           12, this.literal("string"));
+        this.addPrefix("identifier:",       12, this.literal("identifier"));
+        this.addPrefix("identifier:true",   12, this.literal("boolean"));
+        this.addPrefix("identifier:false",  12, this.literal("boolean"));
+        this.addPrefix("identifier:this",   12, this.literal("context"));
     }
-
-    Parser.ensure(tokens, "symbol:}");
-
-    return new Node("block", statements);
-}
-
-function blankStatement () {
-    return new Node("blank");
-}
-
-function blankExpression () {
-    return new Node("blank");
-}
-
-export default new Parser((stmt, prefix, infix) => {
-    stmt("identifier:fun", (tokens, left, parseStmt, parseExpr) => {
-        const name = Parser.ensure(tokens, "identifier:");
+    parseFunctionStmt (tokens) {
+        const start = tokens.previous().start;
+        const name = this.ensure(tokens, "identifier:");
         const parameters = [];
-        Parser.ensure(tokens, "symbol:(");
+        this.ensure(tokens, "symbol:(");
 
-        while (!Parser.match(tokens, "symbol:)"))
+        while (!this.match(tokens, "symbol:)"))
         {
-            const param = Parser.ensure(tokens, "identifier:");
+            const param = this.ensure(tokens, "identifier:");
             parameters.push(param);
 
-            if (Parser.match(tokens, "symbol:,"))
+            if (this.match(tokens, "symbol:,"))
                 tokens.next();
             else
                 break;
         }
 
-        Parser.ensure(tokens, "symbol:)");
+        this.ensure(tokens, "symbol:)");
 
-        const block = parseBlock(tokens, parseStmt);
+        const block = this.parseBlock(tokens, parseStmt);
 
-        return new Node("function", { name, parameters, block });
-    });
-    stmt("identifier:class", (tokens, left, parseStmt, parseExpr) => {
-        const name = Parser.ensure(tokens, "identifier:");
+        return this.createNode("function", start, null, { name, parameters, block });
+    }
+    parseClassStmt (tokens) {
+        const start = tokens.previous().start;
+        const name = this.ensure(tokens, "identifier:");
         const methods = [];
         let superClass = null;
 
-        if (Parser.match(tokens, "symbol:<"))
+        if (this.match(tokens, "symbol:<"))
         {
             tokens.next();
-            superClass = Parser.ensure(tokens, "identifier:");
+            superClass = this.ensure(tokens, "identifier:");
         }
         
-        Parser.ensure(tokens, "symbol:{");
+        this.ensure(tokens, "symbol:{");
 
-        if (!Parser.match(tokens, "symbol:}"))
+        if (!this.match(tokens, "symbol:}"))
         {
             while (true) {
-                const name = Parser.ensure(tokens, "identifier:");
+                const name = this.ensure(tokens, "identifier:");
                 const parameters = [];
 
-                Parser.ensure(tokens, "symbol:(");
+                this.ensure(tokens, "symbol:(");
 
-                if (!Parser.match(tokens, "symbol:)"))
+                if (!this.match(tokens, "symbol:)"))
                 {
                     while (true) {
-                        const param = Parser.ensure(tokens, "identifier:");
+                        const param = this.ensure(tokens, "identifier:");
                         parameters.push(param);
 
-                        if (Parser.match(tokens, "symbol:,"))
+                        if (this.match(tokens, "symbol:,"))
                             tokens.next();
                         else
                             break;
                     }
                 }
 
-                Parser.ensure(tokens, "symbol:)");
+                this.ensure(tokens, "symbol:)");
 
-                const block = parseBlock(tokens, parseStmt);
+                const block = this.parseBlock(tokens);
                 
                 methods.push({ name, parameters, block });
 
-                if (Parser.match(tokens, "symbol:}"))
+                if (this.match(tokens, "symbol:}"))
                     break;
             }
         }
 
-        Parser.ensure(tokens, "symbol:}");
+        this.ensure(tokens, "symbol:}");
 
-        return new Node("class", { name, superClass, methods });
-    });
-    stmt("identifier:var", (tokens, left, parseStmt, parseExpr) => {
-        const name = Parser.ensure(tokens, "identifier:");
-        let initialiser = blankExpression();
+        return this.createNode("class", start, null, { name, superClass, methods });
+    }
+    parseVarStmt (tokens) {
+        const start = tokens.previous().start;
+        const name = this.ensure(tokens, "identifier:");
+        let initialiser;
     
-        if (Parser.match(tokens, "symbol:=")) {
+        if (this.match(tokens, "symbol:=")) {
             tokens.next();
-            initialiser = parseExpr(tokens);
+            initialiser = this.parseExpression(tokens);
+        }
+        else {
+            initialiser = this.parseBlank(tokens);
         }
     
-        Parser.endStatement(tokens);
+        this.endStatement(tokens);
     
-        return new Node("variable", { name, initialiser });
-    });
-    stmt("identifier:return", (tokens, left, parseStmt, parseExpr) => {
-        let expression = blankExpression();
-        if (!Parser.shouldEndStatement(tokens))
-            expression = parseExpr(tokens);
+        return this.createNode("variable", start, null, { name, initialiser });
+    }
+    parseReturnStmt (tokens) {
+        const start = tokens.previous().start;
+        let expression;
+        if (!this.shouldEndStatement(tokens))
+            expression = this.parseExpression(tokens);
+        else
+            expression = this.parseBlank(tokens);
 
-        Parser.endStatement(tokens);
+        this.endStatement(tokens);
 
-        return new Node("return", expression);
-    });
-    stmt("identifier:print", (tokens, left, parseStmt, parseExpr) => {
-        let expression = blankExpression();
-        if (!Parser.shouldEndStatement(tokens))
-            expression = parseExpr(tokens);
+        return this.createNode("return", start, null, expression);
+    }
+    parsePrintStmt (tokens) {
+        const start = tokens.previous().start;
+        let expression;
 
-        Parser.endStatement(tokens);
+        if (!this.shouldEndStatement(tokens))
+            expression = this.parseExpression(tokens);
+        else
+            expression = this.parseBlank(tokens);
 
-        return new Node("print", expression);
-    });
-    stmt("identifier:if", (tokens, left, parseStmt, parseExpr) => {
-        let elseStatement = blankStatement();
+        this.endStatement(tokens);
 
+        return this.createNode("print", start, null, expression);
+    }
+    parseIfStmt (tokens) {
+        const start = tokens.previous().start;
         // parse condition
 
-        Parser.ensure(tokens, "symbol:(");
+        this.ensure(tokens, "symbol:(");
 
-        const condition = parseExpr(tokens);
+        const condition = this.parseExpression(tokens);
 
-        Parser.ensure(tokens, "symbol:)");
+        this.ensure(tokens, "symbol:)");
 
         // parse thenStatement
 
-        const thenStatement = parseStmt(tokens);
+        const thenStatement = this.parseStatement(tokens);
 
         // check for elseStatement
+        let elseStatement;
 
-        if (Parser.match(tokens, "identifier:else")) {
+        if (this.match(tokens, "identifier:else")) {
             tokens.next();
-            elseStatement = parseStmt(tokens);
+            elseStatement = this.parseStatement(tokens);
+        }
+        else {
+            elseStatement = this.parseBlank(tokens);
         }
 
-        return new Node("if", {
+        return this.createNode("if", start, null, {
             condition,
             thenStatement,
             elseStatement
         });
-    });
-    stmt("identifier:while", (tokens, left, parseStmt, parseExpr) => {
+    }
+    parseWhileStmt (tokens) {
+        const start = tokens.previous().start;
         // parse condition
 
-        Parser.ensure(tokens, "symbol:(");
+        this.ensure(tokens, "symbol:(");
 
-        const condition = parseExpr(tokens);
+        const condition = this.parseExpression(tokens);
 
-        Parser.ensure(tokens, "symbol:)");
+        this.ensure(tokens, "symbol:)");
 
         // parse thenStatement
 
-        const thenStatement = parseStmt(tokens);
+        const thenStatement = this.parseStatement(tokens);
 
-        return new Node("while", {
+        return this.createNode("while", start, null, {
             condition,
             thenStatement
         });
-    });
-    stmt("identifier:for", (tokens, left, parseStmt, parseExpr) => {
-        Parser.ensure(tokens, "symbol:(");
+    }
+    parseForStmt (tokens) {
+        const start = tokens.previous().start;
+        this.ensure(tokens, "symbol:(");
 
         let setup = null;
         let condition = null;
         let step = null;
 
-        if (Parser.match(tokens, "identifier:var" || Parser.match(tokens, "symbol:;"))) {
-            setup = parseStmt(tokens); // either variable or blank
+        if (this.match(tokens, "identifier:var" || this.match(tokens, "symbol:;"))) {
+            setup = this.parseStatement(tokens); // either variable or blank
         }
         else {
-            setup = new Node("expression", parseExpr(tokens));
-            Parser.endStatement(tokens);
+            let expr = this.parseExpression(tokens);
+            setup = this.createNode("expression", null, null, expr);
+            this.endStatement(tokens);
         }
 
 
-        if (Parser.match(tokens, "symbol:;")) {
+        if (this.match(tokens, "symbol:;")) {
             tokens.next();
-            condition = blankStatement();
+            condition = this.parseBlank(tokens);
         }
         else {
-            condition = new Node("expression", parseExpr(tokens));
-            Parser.endStatement(tokens);
+            let expr = this.parseExpression(tokens);
+            condition = this.createNode("expression", null, null, expr);
+            this.endStatement(tokens);
         }
 
-        if (Parser.match(tokens, "symbol:)")) {
-            step = blankStatement();
+        if (this.match(tokens, "symbol:)")) {
+            step = this.parseBlank(tokens);
         }
         else {
-            step = new Node("expression", parseExpr(tokens));
+            let expr = this.parseExpression(tokens);
+            step = this.createNode("expression", null, null, expr);
         }
 
-        Parser.ensure(tokens, "symbol:)");
+        this.ensure(tokens, "symbol:)");
 
-        const thenStatement = parseStmt(tokens);
+        const thenStatement = this.parseStatement(tokens);
 
-        return new Node("for", {
+        return this.createNode("for", start, null, {
             setup,
             condition,
             step,
             thenStatement
         });
-    });
-    stmt("symbol:{", (tokens, left, parseStmt, parseExpr) => {
+    }
+    parseBlockStmt (tokens) {
+        // NOTE parseBlock expects to start with a "{" but the statement matcher
+        // consumes it, so step the iterator back
         tokens.back();
-        return parseBlock(tokens, parseStmt);
-    });
-    stmt("symbol:;", (tokens, left, parseStmt, parseExpr) => blankStatement());
-
-    // sequence
-    infix("symbol:,", 1, Parser.binary);
-    // assignment
-    infix("symbol:=", 2, (tokens, left, parseStmt, parseExpr) => {
-        const right = parseExpr(tokens, 1);
+        return this.parseBlock(tokens);
+    }
+    parseBlank (tokens) {
+        return this.createNode("blank", null, null, null);
+    }
+    parseBlock (tokens) {
+        const start = tokens.previous().start;
+        const statements = [];
+        this.ensure(tokens, "symbol:{");
+    
+        while (!this.match(tokens, "symbol:}")) {
+            statements.push(this.parseStatement(tokens));
+        }
+    
+        this.ensure(tokens, "symbol:}");
+    
+        return this.createNode("block", start, null, statements);
+    }
+    parseAssignentExpression (tokens, left) {
+        const start = tokens.previous().start;
+        const right = this.parseExpression(tokens, 1);
 
         switch (left.type) {
             case "member":
-                return new Node("set", {
+                return this.createNode("set", start, null, {
                     left: left.data.left,
                     name: left.data.name,
                     right
                 });
             case "computed":
-                return new Node("computed-set", {
+                return this.createNode("computed-set", start, null, {
                     left: left.data.left,
                     expression: left.data.expression,
                     right
                 });
             case "identifier":
-                return new Node("assignment", {
+                return this.createNode("assignment", start, null, {
                     name: left.data,
                     right
                 });
             default:
+                // TODO use Pratt error type
                 throw new Error("Invalid assignment target");
         }
-        
-    });
-    // logical or
-    infix("identifier:or", 3, Parser.binary);
-    // logical and
-    infix("identifier:and", 4, Parser.binary);
-    // equality
-    infix("symbol:==", 5, Parser.binary);
-    infix("symbol:!=", 5, Parser.binary);
-    // comparison
-    infix("symbol:<", 6, Parser.binary);
-    infix("symbol:>", 6, Parser.binary);
-    infix("symbol:<=", 6, Parser.binary);
-    infix("symbol:>=", 6, Parser.binary);
-    // add/sub
-    infix("symbol:+", 7, Parser.binary);
-    infix("symbol:-", 7, Parser.binary);
-    // mult/div
-    infix("symbol:/", 8, Parser.binary);
-    infix("symbol:*", 8, Parser.binary);
-    // unary not
-    prefix("symbol:!", 9, Parser.unary);
-    // unary minus
-    prefix("symbol:-", 9, Parser.unary);
-    // call function
-    infix("symbol:(", 10, (tokens, left, parseStmt, parseExpr) => {
+    }
+    parseCallExpression (tokens, left) {
+        const start = tokens.previous().start;
         const args = [];
 
-        while (!Parser.match(tokens, "symbol:)")) {
-            args.push(parseExpr(tokens, 2));
+        while (!this.match(tokens, "symbol:)")) {
+            args.push(this.parseExpression(tokens, 2));
 
-            if (Parser.match(tokens, "symbol:,"))
+            if (this.match(tokens, "symbol:,"))
                 tokens.next();
 
             else
                 break;
         }
 
-        Parser.ensure(tokens, "symbol:)");
+        this.ensure(tokens, "symbol:)");
 
-        return new Node("call", { left, args });
-    })
+        return this.createNode("call", start, null, { left, args });
+    }
+    parseSubscriptExpression (tokens, left) {
+        const start = tokens.previous().start;
+        const expression = this.parseExpression(tokens);
 
-    infix("symbol:[", 10, (tokens, left, parseStmt, parseExpr) => {
-        const expression = parseExpr(tokens);
+        this.ensure(tokens, "symbol:]");
 
-        Parser.ensure(tokens, "symbol:]");
+        return this.createNode("computed", start, null, { left, expression });
+    }
+    parseMemberExpression (tokens, left) {
+        const start = tokens.previous().start;
+        const name = this.ensure(tokens, "identifier:");
 
-        return new Node("computed", { left, expression });
-    })
+        return this.createNode("member", start, null, { left, name });
+    }
+    parseGroupingExpression (tokens) {
+        const start = tokens.previous().start;
+        let expression;
 
-    infix("symbol:.", 10, (tokens, left, parseStmt, parseExpr) => {
-      const name = Parser.ensure(tokens, "identifier:");
+        if (!this.match(tokens, "symbol:)"))
+            expression = this.parseExpression(tokens);
+        else
+            expression = this.parseBlank(tokens);
 
-      return new Node("member", { left, name });
-    })
+        this.ensure(tokens, "symbol:)");
 
-    prefix("symbol:(", 11, (tokens, left, parseStmt, parseExpr) => {
-      let expression = blankExpression();
-
-      if (!Parser.match(tokens, "symbol:)"))
-        expression = parseExpr(tokens);
-
-      Parser.ensure(tokens, "symbol:)");
-
-      return new Node("grouping", expression);
-    })
-
-    prefix("number:", 12, Parser.number);
-    prefix("string:", 12, Parser.string);
-    prefix("identifier:", 12, Parser.identifier);
-    prefix("identifier:true", 12, Parser.boolean);
-    prefix("identifier:false", 12, Parser.boolean);
-    prefix("identifier:this", 12, Parser.context);
-});
+        return this.createNode("grouping", start, null, expression);
+    }
+}
