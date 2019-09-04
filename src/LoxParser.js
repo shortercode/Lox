@@ -1,6 +1,6 @@
 import { Parser } from "../lib/Pratt.js";
 
-class LoxParser extends Parser {
+export default class LoxParser extends Parser {
     constructor () {
         super();
         this.addStatement("identifier:fun",     this.parseFunctionStmt);

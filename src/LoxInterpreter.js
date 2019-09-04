@@ -35,7 +35,7 @@ function isTruthy (value) {
     return true;
 }
 
-class LoxInterpreter extends Interpreter {
+export default class LoxInterpreter extends Walker {
     constructor () {
         super(); 
         
