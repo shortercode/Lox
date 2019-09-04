@@ -1,4 +1,4 @@
-import { Walker } from "./lib/Pratt.js";
+import { Walker } from "../lib/Pratt.js";
 import Function from "./Function.js";
 import Class from "./Class.js";
 import RuntimeError from "./RuntimeError.js";
