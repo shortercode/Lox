@@ -76,8 +76,9 @@ export default class LoxParser extends Parser {
         this.ensure(tokens, "symbol:)");
 
         const block = this.parseBlock(tokens, parseStmt);
+        const end = tokens.previous().end;
 
-        return this.createNode("function", start, null, { name, parameters, block });
+        return this.createNode("function", start, end, { name, parameters, block });
     }
     parseClassStmt (tokens) {
         const start = tokens.previous().start;
@@ -126,8 +127,9 @@ export default class LoxParser extends Parser {
         }
 
         this.ensure(tokens, "symbol:}");
+        const end = tokens.previous().end;
 
-        return this.createNode("class", start, null, { name, superClass, methods });
+        return this.createNode("class", start, end, { name, superClass, methods });
     }
     parseVarStmt (tokens) {
         const start = tokens.previous().start;
@@ -143,8 +145,9 @@ export default class LoxParser extends Parser {
         }
     
         this.endStatement(tokens);
+        const end = tokens.previous().end;
     
-        return this.createNode("variable", start, null, { name, initialiser });
+        return this.createNode("variable", start, end, { name, initialiser });
     }
     parseReturnStmt (tokens) {
         const start = tokens.previous().start;
@@ -155,8 +158,9 @@ export default class LoxParser extends Parser {
             expression = this.parseBlank(tokens);
 
         this.endStatement(tokens);
+        const end = tokens.previous().end;
 
-        return this.createNode("return", start, null, expression);
+        return this.createNode("return", start, end, expression);
     }
     parsePrintStmt (tokens) {
         const start = tokens.previous().start;
@@ -168,8 +172,9 @@ export default class LoxParser extends Parser {
             expression = this.parseBlank(tokens);
 
         this.endStatement(tokens);
+        const end = tokens.previous().end;
 
-        return this.createNode("print", start, null, expression);
+        return this.createNode("print", start, end, expression);
     }
     parseIfStmt (tokens) {
         const start = tokens.previous().start;
@@ -196,7 +201,9 @@ export default class LoxParser extends Parser {
             elseStatement = this.parseBlank(tokens);
         }
 
-        return this.createNode("if", start, null, {
+        const end = tokens.previous().end;
+
+        return this.createNode("if", start, end, {
             condition,
             thenStatement,
             elseStatement
@@ -215,8 +222,9 @@ export default class LoxParser extends Parser {
         // parse thenStatement
 
         const thenStatement = this.parseStatement(tokens);
+        const end = tokens.previous().end;
 
-        return this.createNode("while", start, null, {
+        return this.createNode("while", start, end, {
             condition,
             thenStatement
         });
@@ -234,7 +242,7 @@ export default class LoxParser extends Parser {
         }
         else {
             let expr = this.parseExpression(tokens);
-            setup = this.createNode("expression", null, null, expr);
+            setup = this.createNode("expression", expr.start, expr.end, expr);
             this.endStatement(tokens);
         }
 
@@ -245,7 +253,7 @@ export default class LoxParser extends Parser {
         }
         else {
             let expr = this.parseExpression(tokens);
-            condition = this.createNode("expression", null, null, expr);
+            condition = this.createNode("expression", expr.start, expr.end, expr);
             this.endStatement(tokens);
         }
 
@@ -254,14 +262,15 @@ export default class LoxParser extends Parser {
         }
         else {
             let expr = this.parseExpression(tokens);
-            step = this.createNode("expression", null, null, expr);
+            step = this.createNode("expression", expr.start, expr.end, expr);
         }
 
         this.ensure(tokens, "symbol:)");
 
         const thenStatement = this.parseStatement(tokens);
+        const end = tokens.previous().end;
 
-        return this.createNode("for", start, null, {
+        return this.createNode("for", start, end, {
             setup,
             condition,
             step,
@@ -275,7 +284,8 @@ export default class LoxParser extends Parser {
         return this.parseBlock(tokens);
     }
     parseBlank (tokens) {
-        return this.createNode("blank", null, null, null);
+        const position = tokens.previous().end;
+        return this.createNode("blank", position, position, null);
     }
     parseBlock (tokens) {
         const start = tokens.previous().start;
@@ -287,28 +297,30 @@ export default class LoxParser extends Parser {
         }
     
         this.ensure(tokens, "symbol:}");
+        const end = tokens.previous().end;
     
-        return this.createNode("block", start, null, statements);
+        return this.createNode("block", start, end, statements);
     }
     parseAssignentExpression (tokens, left) {
         const start = tokens.previous().start;
         const right = this.parseExpression(tokens, 1);
+        const end = tokens.previous().end;
 
         switch (left.type) {
             case "member":
-                return this.createNode("set", start, null, {
+                return this.createNode("set", start, end, {
                     left: left.data.left,
                     name: left.data.name,
                     right
                 });
             case "computed":
-                return this.createNode("computed-set", start, null, {
+                return this.createNode("computed-set", start, end, {
                     left: left.data.left,
                     expression: left.data.expression,
                     right
                 });
             case "identifier":
-                return this.createNode("assignment", start, null, {
+                return this.createNode("assignment", start, end, {
                     name: left.data,
                     right
                 });
@@ -332,22 +344,25 @@ export default class LoxParser extends Parser {
         }
 
         this.ensure(tokens, "symbol:)");
+        const end = tokens.previous().end;
 
-        return this.createNode("call", start, null, { left, args });
+        return this.createNode("call", start, end, { left, args });
     }
     parseSubscriptExpression (tokens, left) {
         const start = tokens.previous().start;
         const expression = this.parseExpression(tokens);
 
         this.ensure(tokens, "symbol:]");
+        const end = tokens.previous().end;
 
-        return this.createNode("computed", start, null, { left, expression });
+        return this.createNode("computed", start, end, { left, expression });
     }
     parseMemberExpression (tokens, left) {
         const start = tokens.previous().start;
         const name = this.ensure(tokens, "identifier:");
+        const end = tokens.previous().end;
 
-        return this.createNode("member", start, null, { left, name });
+        return this.createNode("member", start, end, { left, name });
     }
     parseGroupingExpression (tokens) {
         const start = tokens.previous().start;
@@ -359,7 +374,8 @@ export default class LoxParser extends Parser {
             expression = this.parseBlank(tokens);
 
         this.ensure(tokens, "symbol:)");
+        const end = tokens.previous().end;
 
-        return this.createNode("grouping", start, null, expression);
+        return this.createNode("grouping", start, end, expression);
     }
 }
