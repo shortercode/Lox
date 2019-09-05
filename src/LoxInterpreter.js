@@ -39,6 +39,7 @@ export default class LoxInterpreter extends Walker {
     constructor () {
         super(); 
         
+        this.defineStatement("module",  this.walkModule);
         this.defineStatement("function", this.walkFunction);
         this.defineStatement("class", this.walkClass);
         this.defineStatement("variable", this.walkVariable);
@@ -64,6 +65,11 @@ export default class LoxInterpreter extends Walker {
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.get(expr));
         this.defineExpression("context", (expr, ctx) => ctx.get(expr));
+    }
+    walkModule (stmts, ctx) {
+        for (const stmt of stmts) {
+            this.walkStatement(stmt, ctx);
+        }
     }
     walkFunction (stmt, ctx) {
         const { parameters, block, name } = stmt;
