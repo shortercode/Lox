@@ -2,10 +2,7 @@ import LoxInterpreter from "./LoxInterpreter";
 import LoxParser from "./LoxParser";
 import Context from "./Context.js";
 import NativeFunction from "./NativeFunction.js";
-
-const fs = require("fs");
-
-function createIsolate (stdout, stderr) {
+function createIsolate (stdout) {
   const ctx = new Context;
   const parser = new LoxParser;
   const interpreter = new LoxInterpreter;
@@ -15,14 +12,8 @@ function createIsolate (stdout, stderr) {
   ctx.define("nil", null);
 
   return function (str) {
-    try {
-      const ast = parser.parseProgram(str);
-      interpreter.walk(ast, ctx);
-    }
-    catch (e) {
-      stderr && stderr(e.message);
-    }
-    
+    const ast = parser.parseProgram(str);
+    interpreter.walk(ast, ctx);
   };
 }
 
