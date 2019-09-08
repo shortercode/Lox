@@ -47,7 +47,7 @@ export default class LoxParser extends Parser {
         // member
         this.addInfix("symbol:.",           10, this.parseMemberExpression)
         // grouping
-        this.addPrefix("symbol:(",          11, this.parseMemberExpression)
+        this.addPrefix("symbol:(",          11, this.parseGroupingExpression)
 
         this.addPrefix("number:",           12, this.literal("number"));
         this.addPrefix("string:",           12, this.literal("string"));
@@ -284,13 +284,14 @@ export default class LoxParser extends Parser {
         return this.parseBlock(tokens);
     }
     parseBlank (tokens) {
-        const position = tokens.previous().end;
+        const position = tokens.peek().start;
         return this.createNode("blank", position, position, null);
     }
     parseBlock (tokens) {
-        const start = tokens.previous().start;
-        const statements = [];
+        
         this.ensure(tokens, "symbol:{");
+        const statements = [];
+        const start = tokens.previous().start;
     
         while (!this.match(tokens, "symbol:}")) {
             statements.push(this.parseStatement(tokens));
