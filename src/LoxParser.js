@@ -39,7 +39,7 @@ export default class LoxParser extends Parser {
         // unary not
         this.addPrefix("symbol:!",          9,  this.unary("!"));
         // unary minus
-        this.addPrefix("symbol:-",          9,  this.unary("-"));
+        this.addPrefix("symbol:-",          9,  this.unary("minus"));
         // call function
         this.addInfix("symbol:(",           10, this.parseCallExpression);
         // subscript ( computed member )
@@ -55,6 +55,7 @@ export default class LoxParser extends Parser {
         this.addPrefix("identifier:true",   12, this.literal("boolean"));
         this.addPrefix("identifier:false",  12, this.literal("boolean"));
         this.addPrefix("identifier:this",   12, this.literal("context"));
+        this.addPrefix("identifier:super",  12, this.parseSuperExpression);
     }
     parseFunctionStmt (tokens) {
         const start = tokens.previous().start;
@@ -75,7 +76,7 @@ export default class LoxParser extends Parser {
 
         this.ensure(tokens, "symbol:)");
 
-        const block = this.parseBlock(tokens, parseStmt);
+        const block = this.parseBlock(tokens);
         const end = tokens.previous().end;
 
         return this.createNode("function", start, end, { name, parameters, block });
@@ -378,5 +379,13 @@ export default class LoxParser extends Parser {
         const end = tokens.previous().end;
 
         return this.createNode("grouping", start, end, expression);
+    }
+    parseSuperExpression (tokens) {
+        const start = tokens.previous().start;
+        this.ensure(tokens, "symbol:.");
+        const name = this.ensure(tokens, "identifier:");
+        const end = tokens.previous().end;
+
+        return this.createNode("super", start, end, name);
     }
 }
