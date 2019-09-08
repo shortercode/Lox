@@ -32,7 +32,7 @@ export default class Context {
       this.printMethod(str);
   }
   callFunction (fn, args, walkStmt) {
-    fn.call(args, this, walkStmt);      
+    return fn.call(args, this, walkStmt);      
   }
   return (value) {
     if (this.callStack === null)
