@@ -31,7 +31,7 @@ function assert(test, str) {
 
 function isTruthy (value) {
     if (value === null) return false;           
-    if (value === true) return true;
+    if (value === false) return false;
     return true;
 }
 
@@ -127,7 +127,11 @@ export default class LoxInterpreter extends Walker {
         ctx.return(this.walkExpression(stmt, ctx));
     }
     walkPrint (stmt, ctx) {
-        ctx.print(this.walkExpression(stmt, ctx));
+        const result = this.walkExpression(stmt, ctx);
+        if (result instanceof Class)
+            ctx.print(result.name);
+        else
+            ctx.print(result);
     }
     walkIf (stmt, ctx) {
         const { condition, thenStatement, elseStatement } = stmt;
@@ -272,7 +276,7 @@ export default class LoxInterpreter extends Walker {
         }
 
         else
-            throw new RuntimeError(`${fn} is not a function`);
+            throw new RuntimeError(`Can only call functions and classes`);
     }
     walkSuperExpression (expr, ctx) {
         const inst = ctx.get("this");
