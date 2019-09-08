@@ -31,7 +31,4 @@ function defineFunction (ctx, name, parameters, fn) {
   ctx.define(name, loxFunction);
 }
 
-const location = process.argv[2]
-const str = fs.readFileSync(location, "utf-8");
-const isolate = createIsolate(console.log, console.warn);
-isolate(str);
+module.exports = createIsolate;
