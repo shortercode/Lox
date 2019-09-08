@@ -20,7 +20,7 @@ const binary = new Map(Object.entries({
 }));
 
 const unary = new Map(Object.entries({
-    "-": a => -a,
+    "minus": a => -a,
     "!": a => !isTruthy(a)
 }));
 
@@ -38,6 +38,8 @@ function isTruthy (value) {
 export default class LoxInterpreter extends Walker {
     constructor () {
         super(); 
+
+        this.boundWalkStatement = this.walkStatement.bind(this);
         
         this.defineStatement("module",  this.walkModule);
         this.defineStatement("function", this.walkFunction);
@@ -51,8 +53,24 @@ export default class LoxInterpreter extends Walker {
         this.defineStatement("for", this.walkFor);
         this.defineStatement("block", this.walkBlock);
         this.defineStatement("blank", (stmt, ctx) => {});
-        this.defineExpression("binary", this.walkBinaryExpression);
-        this.defineExpression("unary", this.walkUnaryExpression);
+
+        this.defineExpression(",",  (expr, ctx) => this.walkBinaryExpression(",",   expr, ctx));
+        this.defineExpression("or", (expr, ctx) => this.walkLogicalBinaryExpression("or",   expr, ctx));
+        this.defineExpression("and",(expr, ctx) => this.walkLogicalBinaryExpression("and",   expr, ctx));
+        this.defineExpression("==", (expr, ctx) => this.walkBinaryExpression("==",  expr, ctx));
+        this.defineExpression("!=", (expr, ctx) => this.walkBinaryExpression("!=",  expr, ctx));
+        this.defineExpression("<",  (expr, ctx) => this.walkBinaryExpression("<",   expr, ctx));
+        this.defineExpression(">",  (expr, ctx) => this.walkBinaryExpression(">",   expr, ctx));
+        this.defineExpression("<=", (expr, ctx) => this.walkBinaryExpression("<=",  expr, ctx));
+        this.defineExpression(">=", (expr, ctx) => this.walkBinaryExpression(">=",  expr, ctx));
+        this.defineExpression("+",  (expr, ctx) => this.walkBinaryExpression("+",   expr, ctx));
+        this.defineExpression("-",  (expr, ctx) => this.walkBinaryExpression("-",   expr, ctx));
+        this.defineExpression("*",  (expr, ctx) => this.walkBinaryExpression("*",   expr, ctx));
+        this.defineExpression("/",  (expr, ctx) => this.walkBinaryExpression("/",   expr, ctx));
+
+        this.defineExpression("!",  (expr, ctx) => this.walkUnaryExpression("!",    expr, ctx));
+        this.defineExpression("minus",  (expr, ctx) => this.walkUnaryExpression("minus",    expr, ctx));
+
         this.defineExpression("grouping", (expr, ctx) => this.walkExpression(expr, ctx));
         this.defineExpression("number", (expr, ctx) => Number(expr));
         this.defineExpression("string", (expr, ctx) => String(expr));
@@ -65,6 +83,7 @@ export default class LoxInterpreter extends Walker {
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.get(expr));
         this.defineExpression("context", (expr, ctx) => ctx.get(expr));
+        this.defineExpression("super", this.walkSuperExpression);
     }
     walkModule (stmts, ctx) {
         for (const stmt of stmts) {
@@ -86,6 +105,7 @@ export default class LoxInterpreter extends Walker {
         if (superClass) {
             scope = new Scope(scope);
             scope.set("super", parent);
+            definitions
         }
         
         for (const method of methods) {
@@ -133,13 +153,13 @@ export default class LoxInterpreter extends Walker {
         ctx.push();
         this.walkStatement(setup, ctx);
 
-        while (this.walkExpression(condition, ctx)) {
+        while (this.walkStatement(condition, ctx)) {
             ctx.push();
             this.walkStatement(thenStatement, ctx);
             ctx.pop();
             if (ctx.shouldReturn())
                 break;
-            this.walkExpression(step, ctx);
+            this.walkStatement(step, ctx);
         }
         ctx.pop();
     }
@@ -152,8 +172,8 @@ export default class LoxInterpreter extends Walker {
         }
         ctx.pop();
     }
-    walkBinaryExpression (expr, ctx) {
-        const { operator, left, right } = expr;
+    walkLogicalBinaryExpression (operator, expr, ctx) {
+        const { left, right } = expr;
 
         const a = this.walkExpression(left, ctx);
         // both "or" and "and" are shortcircuit style operators
@@ -167,6 +187,11 @@ export default class LoxInterpreter extends Walker {
                     return this.walkExpression(right, ctx);
                 }
         }
+    }
+    walkBinaryExpression (operator, expr, ctx) {
+        const { left, right } = expr;
+
+        const a = this.walkExpression(left, ctx);
 
         const b = this.walkExpression(right, ctx);
         const method = binary.get(operator);
@@ -175,10 +200,9 @@ export default class LoxInterpreter extends Walker {
 
         return method(a, b);
     }
-    walkUnaryExpression (expr, ctx) {
-        const { operator, expression } = expr;
+    walkUnaryExpression (operator, expr, ctx) {
 
-        const a = this.walkExpression(expression, ctx);
+        const a = this.walkExpression(expr, ctx);
         const method = unary.get(operator);
 
         assert(method, "Illegal operator");
@@ -190,7 +214,6 @@ export default class LoxInterpreter extends Walker {
         const inst = this.walkExpression(left, ctx);
 
         assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
-
         return inst.get(name);
     }
     walkComputedExpression (expr, ctx) {
@@ -236,19 +259,28 @@ export default class LoxInterpreter extends Walker {
         const values = args.map(arg => this.walkExpression(arg, ctx));
 
         if (fn instanceof Function)
-            return ctx.callFunction(fn, values, walkStmt);
+            return ctx.callFunction(fn, values, this.boundWalkStatement);
 
         else if (fn instanceof Class) {
             const inst = new Instance(fn);
             const init = inst.get("init");
             
             if (init)
-                ctx.callFunction(init, args, this.walkStatement);
+                ctx.callFunction(init, args, this.boundWalkStatement);
 
             return inst;
         }
 
         else
             throw new RuntimeError(`${fn} is not a function`);
+    }
+    walkSuperExpression (expr, ctx) {
+        const inst = ctx.get("this");
+        assert(inst instanceof Instance, `invalid context`); // TODO improve error message
+        const superClass = inst.class.superClass;
+        assert(superClass instanceof Class, `no superClass`); // TODO improve error message
+        const property = superClass.get(expr);
+        assert(property instanceof Function, "expected Function"); // TODO improve error message
+        return property.bind(inst);
     }
 }
