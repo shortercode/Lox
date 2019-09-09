@@ -147,9 +147,9 @@ function main () {
     });
     it("inherited_method", async function () {
       const stdout = await runTest("./test/class/inherited_method.lox");
-      expect(stdout[0], "foo");
-      expect(stdout[0], "bar");
-      expect(stdout[0], "baz");
+      expect(stdout[0], "in foo");
+      expect(stdout[1], "in bar");
+      expect(stdout[2], "in baz");
     });
     it("local_inherit_other", async function () {
       const stdout = await runTest("./test/class/local_inherit_other.lox");
