@@ -73,6 +73,7 @@ export default class LoxResolver extends Walker {
         }
         this.walkStatement(block, ctx);
         ctx.pop();
+        ctx.resolveLocal(stmt, name);
     }
     walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;

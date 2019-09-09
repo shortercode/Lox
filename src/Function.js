@@ -1,5 +1,4 @@
 import RuntimeError from "./RuntimeError.js";
-import Scope from "./Scope.js";
 
 class Function {
   constructor (parameters, block, scope) {
@@ -22,9 +21,11 @@ class Function {
     ctx.pushCall();
     ctx.push();
 
+    const env = this.scope[0];
+
     for (let i = 0; i < a; i++) {
       const name = this.parameters[i];
-      ctx.define(name, args[i]);
+      env.set(name, args[i]);
     }
 
     walkStmt(this.block, ctx);
@@ -38,8 +39,9 @@ class Function {
 
 class BoundFunction extends Function {
   constructor (fn, inst) {
-      super(fn.parameters, fn.block, new Scope(fn.scope));
-      this.scope.set("this", inst);
+      const scope = fn.scope.slice(0);
+      scope.unshift(new Map([["this", inst]]));
+      super(fn.parameters, fn.block, scope);
   }
 }
 

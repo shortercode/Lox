@@ -51,10 +51,9 @@ export default class LoxParser extends Parser {
 
         this.addPrefix("number:",           12, this.literal("number"));
         this.addPrefix("string:",           12, this.literal("string"));
-        this.addPrefix("identifier:",       12, this.literal("identifier"));
+        this.addPrefix("identifier:",       12, this.parseIdentifier);
         this.addPrefix("identifier:true",   12, this.literal("boolean"));
         this.addPrefix("identifier:false",  12, this.literal("boolean"));
-        this.addPrefix("identifier:this",   12, this.literal("context"));
         this.addPrefix("identifier:super",  12, this.parseSuperExpression);
     }
     parseFunctionStmt (tokens) {
@@ -90,7 +89,9 @@ export default class LoxParser extends Parser {
         if (this.match(tokens, "symbol:<"))
         {
             tokens.next();
-            superClass = this.ensure(tokens, "identifier:");
+            superClass = {
+                name: this.ensure(tokens, "identifier:")
+            };
         }
         
         this.ensure(tokens, "symbol:{");
@@ -323,7 +324,7 @@ export default class LoxParser extends Parser {
                 });
             case "identifier":
                 return this.createNode("assignment", start, end, {
-                    name: left.data,
+                    name: left.data.value,
                     right
                 });
             default:
@@ -379,6 +380,14 @@ export default class LoxParser extends Parser {
         const end = tokens.previous().end;
 
         return this.createNode("grouping", start, end, expression);
+    }
+    parseIdentifier (tokens) {
+        const token = tokens.previous();
+        const { value, start, end } = token;
+        const type = value === "this" ? "context" : "identifier"; 
+        return this.createNode(type, start, end, {
+            value
+        });
     }
     parseSuperExpression (tokens) {
         const start = tokens.previous().start;

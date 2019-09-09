@@ -3,7 +3,6 @@ import Function from "./Function.js";
 import Class from "./Class.js";
 import RuntimeError from "./RuntimeError.js";
 import Instance from "./Instance.js";
-import Scope from "./Scope.js";
 
 const binary = new Map(Object.entries({
     ",": (a, b) => b,
@@ -40,7 +39,7 @@ export default class LoxInterpreter extends Walker {
         super(); 
 
         this.boundWalkStatement = this.walkStatement.bind(this);
-        
+
         this.defineStatement("module",  this.walkModule);
         this.defineStatement("function", this.walkFunction);
         this.defineStatement("class", this.walkClass);
@@ -81,9 +80,10 @@ export default class LoxInterpreter extends Walker {
         this.defineExpression("computed-set", this.walkComputedSetExpression);
         this.defineExpression("assignment", this.walkAssignmentExpression);
         this.defineExpression("call", this.walkCallExpression);
-        this.defineExpression("identifier", (expr, ctx) => ctx.get(expr));
-        this.defineExpression("context", (expr, ctx) => ctx.get(expr));
+        this.defineExpression("identifier", (expr, ctx) => ctx.get(expr.value, expr));
+        this.defineExpression("context", (expr, ctx) => ctx.get(expr.value, expr));
         this.defineExpression("super", this.walkSuperExpression);
+        this.defineExpression("blank", (expr, ctx) => null);
     }
     walkModule (stmts, ctx) {
         for (const stmt of stmts) {
@@ -92,22 +92,24 @@ export default class LoxInterpreter extends Walker {
     }
     walkFunction (stmt, ctx) {
         const { parameters, block, name } = stmt;
-        const fn = new Function(parameters, block, ctx.scope);
-        ctx.define(name, fn);
+        const fn = new Function(parameters, block, ctx.copyScope());
+        ctx.set(name, stmt, fn);
     }
     walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;
         const definitions = [];
-        const parent = superClass ? ctx.get(superClass) : null;
-        let scope = ctx.scope;
+        const scope = ctx.copyScope();
+        let parent = null;
 
-        // if we have a superClass then add a super reference to a wrapper scope
         if (superClass) {
-            scope = new Scope(scope);
-            scope.set("super", parent);
-            definitions
+            const superName = superClass.name;
+            if (superName === name)
+                throw new RuntimeError(`A class cannot inherit from itself`);
+            parent = ctx.get(superName, superClass);
+            if (!parent)
+                RuntimeError.undefined(superName);
         }
-        
+
         for (const method of methods) {
             const { parameters, name, block } = method;
             const fn = new Function(parameters, block, scope);
@@ -116,12 +118,12 @@ export default class LoxInterpreter extends Walker {
 
         const ctor = new Class(name, parent, definitions);
         
-        ctx.define(name, ctor);
+        ctx.set(name, stmt, ctor);
     }
     walkVariable (stmt, ctx) {
         const { initialiser, name } = stmt;
         const value = this.walkExpression(initialiser, ctx);
-        ctx.define(name, value);
+        ctx.set(name, stmt, value);
     }
     walkReturn (stmt, ctx) {
         ctx.return(this.walkExpression(stmt, ctx));
@@ -252,7 +254,7 @@ export default class LoxInterpreter extends Walker {
         const { name, right } = expr;
         const value = this.walkExpression(right, ctx);
 
-        ctx.set(name, value);
+        ctx.set(name, expr, value);
 
         return value;
     }
@@ -279,6 +281,7 @@ export default class LoxInterpreter extends Walker {
             throw new RuntimeError(`Can only call functions and classes`);
     }
     walkSuperExpression (expr, ctx) {
+        // TODO fix this
         const inst = ctx.get("this");
         assert(inst instanceof Instance, `invalid context`); // TODO improve error message
         const superClass = inst.class.superClass;
