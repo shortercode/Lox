@@ -26,12 +26,6 @@ async function expectFail (fn, expected) {
   assert.fail(`Expected error message: "${expected}"`);
 }
 
-function justRun (folder, name) {
-  it(name, async function () {
-    await runTest(`./test/${folder}/${name}.lox`);
-  })
-}
-
 function main () {
   describe("assignment", function () {
     it("associativity", async function () {
@@ -188,7 +182,7 @@ function main () {
     it("close_over_later_variable", async function () {
       const stdout = await runTest("./test/closure/close_over_later_variable.lox");
       expect(stdout[0], "b");
-      expect(stdout[0], "a");
+      expect(stdout[1], "a");
     });
     it("close_over_method_parameter", async function () {
       const stdout = await runTest("./test/closure/close_over_method_parameter.lox");
@@ -201,8 +195,8 @@ function main () {
     it("nested_closure", async function () {
       const stdout = await runTest("./test/closure/nested_closure.lox");
       expect(stdout[0], "a");
-      expect(stdout[0], "b");
-      expect(stdout[0], "c");
+      expect(stdout[1], "b");
+      expect(stdout[2], "c");
     });
     it("open_closure_in_function", async function () {
       const stdout = await runTest("./test/closure/open_closure_in_function.lox");
@@ -211,7 +205,7 @@ function main () {
     it("reference_closure_multiple_times", async function () {
       const stdout = await runTest("./test/closure/reference_closure_multiple_times.lox");
       expect(stdout[0], "a");
-      expect(stdout[0], "a");
+      expect(stdout[1], "a");
     });
     it("reuse_closure_slot", async function () {
       const stdout = await runTest("./test/closure/reuse_closure_slot.lox");
@@ -220,8 +214,8 @@ function main () {
     it("shadow_closure_with_local", async function () {
       const stdout = await runTest("./test/closure/shadow_closure_with_local.lox");
       expect(stdout[0], "closure");
-      expect(stdout[0], "shadow");
-      expect(stdout[0], "closure");
+      expect(stdout[1], "shadow");
+      expect(stdout[2], "closure");
     });
 
     it("unused_closure", async function () {
@@ -232,20 +226,60 @@ function main () {
       const stdout = await runTest("./test/closure/unused_later_closure.lox");
       expect(stdout[0], "a");
     });
-
-
   });
 
+  describe("comments", function () {
+    it("line_at_eof", async function () {
+      const stdout = await runTest(`./test/comments/line_at_eof.lox`);
+      expect(stdout[0], "ok");
+    });
+    it("only_line_comment_and_line", async function () {
+      await runTest(`./test/comments/only_line_comment_and_line.lox`);
+    });
+    it("only_line_comment", async function () {
+      await runTest(`./test/comments/only_line_comment_and_line.lox`);
+    });
+    it("unicode", async function () {
+      const stdout = await runTest(`./test/comments/unicode.lox`);
+      expect(stdout[0], "ok");
+    });
+  });
+
+  describe("constructor", function () {
+    it("arguments", async function () {
+      const stdout = await runTest(`./test/constructor/arguments.lox`);
+      expect(stdout[0], "init");
+      expect(stdout[1], "1");
+      expect(stdout[2], "2");
+    });
+  });
+
+  return;
+  
   describe("benchmark", function () {
     this.timeout(2e5);
-    return;
-    justRun("benchmark", "binary_trees");
-    justRun("benchmark", "equality");
-    justRun("benchmark", "fib");
-    justRun("benchmark", "invocation");
-    justRun("benchmark", "method_call");
-    justRun("benchmark","properties");
-    justRun("benchmark", "string_equality");
+
+    it("binary_trees", async function () {
+      await runTest(`./test/benchmark/binary_trees.lox`);
+    })
+    it("equality", async function () {
+      await runTest(`./test/benchmark/equality.lox`);
+    })
+    it("fib", async function () {
+      await runTest(`./test/benchmark/fib.lox`);
+    })
+    it("invocation", async function () {
+      await runTest(`./test/benchmark/invocation.lox`);
+    })
+    it("method_call", async function () {
+      await runTest(`./test/benchmark/method_call.lox`);
+    })
+    it("properties", async function () {
+      await runTest(`./test/benchmark/properties.lox`);
+    })
+    it("string_equality", async function () {
+      await runTest(`./test/benchmark/string_equality.lox`);
+    })
   });
 }
 
