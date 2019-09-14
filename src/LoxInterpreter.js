@@ -104,7 +104,7 @@ export default class LoxInterpreter extends Walker {
         if (superClass) {
             const superName = superClass.name;
             if (superName === name)
-                throw new RuntimeError(`A class cannot inherit from itself`);
+                throw new RuntimeError(`A class cannot inherit from itself.`);
             parent = ctx.get(superName, superClass);
             if (!parent)
                 RuntimeError.undefined(superName);
@@ -130,10 +130,10 @@ export default class LoxInterpreter extends Walker {
     }
     walkPrint (stmt, ctx) {
         const result = this.walkExpression(stmt, ctx);
-        if (result instanceof Class)
-            ctx.print(result.name);
+        if (result == null)
+            ctx.print("nil");
         else
-            ctx.print(result);
+            ctx.print(result.toString());
     }
     walkIf (stmt, ctx) {
         const { condition, thenStatement, elseStatement } = stmt;
@@ -219,15 +219,16 @@ export default class LoxInterpreter extends Walker {
         const { left, name } = expr;
         const inst = this.walkExpression(left, ctx);
 
-        assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
+        assert(inst instanceof Instance, "Only instances have properties.");
+        // assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
         return inst.get(name);
     }
     walkComputedExpression (expr, ctx) {
         const { left, expression } = expr;
         const name = this.walkExpression(expression, ctx);
         const inst = this.walkExpression(left, ctx);
-
-        assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
+        assert(inst instanceof Instance, "Only instances have properties.");
+        // assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
         return inst.get(name);
     }
@@ -235,20 +236,24 @@ export default class LoxInterpreter extends Walker {
         const { left, right, name } = expr;
         const inst = this.walkExpression(left, ctx);
 
-        assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
+        assert(inst instanceof Instance, "Only instances have fields.");
+        // assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
         const value = this.walkExpression(right, ctx);
-        return inst.set(name, value);
+        inst.set(name, value);
+        return value;
     }
     walkComputedSetExpression (expr, ctx) {
         const { left, right, expression } = expr;
         const name = this.walkExpression(expression, ctx);
         const inst = this.walkExpression(left, ctx);
 
-        assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
+        assert(inst instanceof Instance, "Only instances have fields.");
+        // assert(inst instanceof Instance, `cannot access property ${name} of non-object`);
 
         const value = this.walkExpression(right, ctx);
-        return inst.set(name, value);
+        inst.set(name, value);
+        return value;
     }
     walkAssignmentExpression (expr, ctx) {
         const { name, right } = expr;
@@ -269,16 +274,18 @@ export default class LoxInterpreter extends Walker {
 
         else if (fn instanceof Class) {
             const inst = new Instance(fn);
-            const init = inst.get("init");
+            const init = inst.get("init", true);
             
             if (init)
-                ctx.callFunction(init, args, this.boundWalkStatement);
+                ctx.callFunction(init, values, this.boundWalkStatement);
+            else if (values.length > 0)
+                throw new RuntimeError(`Expected 0 arguments but got ${values.length}.`);
 
             return inst;
         }
 
         else
-            throw new RuntimeError(`Can only call functions and classes`);
+            throw new RuntimeError(`Can only call functions and classes.`);
     }
     walkSuperExpression (expr, ctx) {
         // TODO fix this
