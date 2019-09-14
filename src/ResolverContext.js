@@ -7,6 +7,8 @@ export default class ResolverContext {
     this.globals = new Map;
     this.lookup = new WeakMap;
 
+    this.functionType = null;
+
     for (const name of globals)
       this.globals.set(name, true);
   }
