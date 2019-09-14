@@ -7,4 +7,7 @@ export default class Class {
   get (name) {
     return this.definitions.get(name) || (this.superClass ? this.superClass.get(name) : null);
   }
+  toString () {
+    return this.name;
+  }
 }
