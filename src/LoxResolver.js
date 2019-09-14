@@ -67,6 +67,7 @@ export default class LoxResolver extends Walker {
         const { parameters, block, name } = stmt;
         ctx.declare(name);
         ctx.define(name);
+        ctx.resolveLocal(stmt, name);
         ctx.push();
 
         const oldFnType = ctx.functionType;
@@ -80,7 +81,6 @@ export default class LoxResolver extends Walker {
 
         ctx.functionType = oldFnType;
         ctx.pop();
-        ctx.resolveLocal(stmt, name);
     }
     walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;
