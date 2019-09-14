@@ -56,6 +56,18 @@ export default class LoxParser extends Parser {
         this.addPrefix("identifier:false",  12, this.literal("boolean"));
         this.addPrefix("identifier:super",  12, this.parseSuperExpression);
     }
+    parseNotDeclaration (tokens) {
+        const stmt = this.parseStatement(tokens);
+        switch (stmt.type) {
+            case "function":
+            case "class":
+            case "variable":
+                throw new Error("Expect expression");
+                break;
+            default:
+                return stmt;
+        }
+    }
     parseFunctionStmt (tokens) {
         const start = tokens.previous().start;
         const name = this.ensure(tokens, "identifier:");
@@ -190,14 +202,14 @@ export default class LoxParser extends Parser {
 
         // parse thenStatement
 
-        const thenStatement = this.parseStatement(tokens);
+        const thenStatement = this.parseNotDeclaration(tokens);
 
         // check for elseStatement
         let elseStatement;
 
         if (this.match(tokens, "identifier:else")) {
             tokens.next();
-            elseStatement = this.parseStatement(tokens);
+            elseStatement = this.parseNotDeclaration(tokens);
         }
         else {
             elseStatement = this.parseBlank(tokens);
@@ -223,7 +235,7 @@ export default class LoxParser extends Parser {
 
         // parse thenStatement
 
-        const thenStatement = this.parseStatement(tokens);
+        const thenStatement = this.parseNotDeclaration(tokens);
         const end = tokens.previous().end;
 
         return this.createNode("while", start, end, {
@@ -239,7 +251,7 @@ export default class LoxParser extends Parser {
         let condition = null;
         let step = null;
 
-        if (this.match(tokens, "identifier:var" || this.match(tokens, "symbol:;"))) {
+        if (this.match(tokens, "identifier:var") || this.match(tokens, "symbol:;")) {
             setup = this.parseStatement(tokens); // either variable or blank
         }
         else {
@@ -269,7 +281,7 @@ export default class LoxParser extends Parser {
 
         this.ensure(tokens, "symbol:)");
 
-        const thenStatement = this.parseStatement(tokens);
+        const thenStatement = this.parseNotDeclaration(tokens);
         const end = tokens.previous().end;
 
         return this.createNode("for", start, end, {
@@ -329,7 +341,7 @@ export default class LoxParser extends Parser {
                 });
             default:
                 // TODO use Pratt error type
-                throw new Error("Invalid assignment target");
+                throw new Error("Invalid assignment target.");
         }
     }
     parseCallExpression (tokens, left) {
