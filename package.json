@@ -1,0 +1,24 @@
+{
+  "name": "lox.js",
+  "version": "0.1.0",
+  "description": "An implementation of the Lox language written in JS",
+  "main": "dist/Lox.js",
+  "directories": {
+    "lib": "lib",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shortercode/Lox.git"
+  },
+  "author": "Iain Shorter <iainshorter@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/shortercode/Lox/issues"
+  },
+  "homepage": "https://github.com/shortercode/Lox#readme",
+  "devDependencies": {}
+}
