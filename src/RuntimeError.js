@@ -3,7 +3,7 @@ class RuntimeError extends Error {
     return `RuntimeError: ${this.message}`;
   }
   static undefined (name) {
-    throw new RuntimeError(`Undefined variable '${name}'`)
+    throw new RuntimeError(`Undefined variable '${name}'.`)
   }
 }
 export default RuntimeError;
