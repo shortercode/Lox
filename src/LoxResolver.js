@@ -1,5 +1,6 @@
 import { Walker } from "../lib/Pratt.js";
 import ResolverContext from "./ResolverContext.js";
+import RuntimeError from "./RuntimeError.js";
 
 export default class LoxResolver extends Walker {
     constructor () {
@@ -67,11 +68,17 @@ export default class LoxResolver extends Walker {
         ctx.declare(name);
         ctx.define(name);
         ctx.push();
+
+        const oldFnType = ctx.functionType;
+        ctx.functionType = "function";
+
         for (const param of parameters) {
             ctx.declare(param);
             ctx.define(param);
         }
         this.walkStatement(block, ctx);
+
+        ctx.functionType = oldFnType;
         ctx.pop();
         ctx.resolveLocal(stmt, name);
     }
@@ -89,11 +96,18 @@ export default class LoxResolver extends Walker {
         for (const method of methods) {
             const { parameters, block } = method;
             ctx.push();
+
+            const fnType = method.name === "init" ? "init" : "method";
+            const oldFnType = ctx.functionType;
+            ctx.functionType = fnType;
+
             for (const param of parameters) {
                 ctx.declare(param);
                 ctx.define(param);
             }
             this.walkStatement(block, ctx);
+
+            ctx.functionType = oldFnType;
             ctx.pop();
         }
         ctx.pop();
@@ -108,6 +122,13 @@ export default class LoxResolver extends Walker {
         ctx.resolveLocal(stmt, name);
     }
     walkReturn (stmt, ctx) {
+        if (ctx.functionType === "init") {
+            if (stmt.type !== "blank")
+                throw new RuntimeError("Cannot return a value from an initializer.");
+        }
+        if (ctx.functionType === null)
+            throw new RuntimeError("Cannot return from top-level code.");
+            
         this.walkExpression(stmt, ctx);
     }
     walkPrint (stmt, ctx) {
