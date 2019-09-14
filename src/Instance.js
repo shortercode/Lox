@@ -6,18 +6,34 @@ export default class Instance {
     this.properties = new Map;
     this.class = cls;
   }
-  get (name) {
+  get (name, allowNull = false) {
     let p = this.properties.get(name);
 
     if (typeof p === "undefined")
       p = this.class.get(name);
 
-    if (typeof p === "undefined")
-      throw new RuntimeError(`property "${name}" is undefined`);
+    if (p == null) {
+      if (allowNull)
+        return p;
+      else
+        throw new RuntimeError(`Undefined property '${name}'.`);
+    } 
 
-    return p instanceof Function ? p.bind(this) : p;
+    if (p instanceof Function) {
+      if (p.isBound())
+        return p;
+      if (name === "init")
+        return p.bindInit(this);
+      else
+        return p.bind(this);
+    }
+
+    return p;
   }
   set (name, value) {
     this.properties.set(name, value);
+  }
+  toString () {
+    return `${this.class.toString()} instance`
   }
 }
