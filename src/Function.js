@@ -22,12 +22,13 @@ class Function {
     if (a !== b)
       throw new RuntimeError(`Expected ${b} arguments but got ${a}.`);
 
-    const oldScope = ctx.swapScope(this.scope);
+    const newScope = this.scope.slice(0);
+    const oldScope = ctx.swapScope(newScope);
     
     ctx.pushCall();
     ctx.push();
 
-    const env = this.scope[0];
+    const env = newScope[0];
 
     for (let i = 0; i < a; i++) {
       const name = this.parameters[i];
