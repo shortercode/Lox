@@ -1,5 +1,5 @@
 import RuntimeError from "./RuntimeError";
-import Function from "./Function.js";
+import LoxFunction from "./Function.js";
 
 export default class Instance {
   constructor (cls) {
@@ -19,7 +19,7 @@ export default class Instance {
         throw new RuntimeError(`Undefined property '${name}'.`);
     } 
 
-    if (p instanceof Function) {
+    if (p instanceof LoxFunction) {
       if (p.isBound())
         return p;
       if (name === "init")

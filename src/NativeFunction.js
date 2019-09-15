@@ -1,9 +1,12 @@
-import Function from "./Function.js";
+import LoxFunction from "./Function.js";
 
-export default class NativeFunction extends Function {
+export default class NativeFunction extends LoxFunction {
   constructor (parameters, method) {
-      super(parameters, null, null);
+      super("", parameters, null, null);
       this.method = method;
+  }
+  toString () {
+    return "<native fn>";
   }
   call (args, ctx, walkStmt) {
       this.method(args);

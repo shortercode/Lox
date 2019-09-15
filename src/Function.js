@@ -1,10 +1,14 @@
 import RuntimeError from "./RuntimeError.js";
 
-class Function {
-  constructor (parameters, block, scope) {
+class LoxFunction {
+  constructor (name, parameters, block, scope) {
       this.parameters = parameters;
       this.block = block;
       this.scope = scope;
+      this.name = name;
+  }
+  toString () {
+    return `<fn ${this.name}>`;
   }
   isBound () {
     return false;
@@ -44,11 +48,11 @@ class Function {
   }
 }
 
-class BoundFunction extends Function {
+class BoundFunction extends LoxFunction {
   constructor (fn, inst) {
       const scope = fn.scope.slice(0);
       scope.unshift(new Map([["this", inst]]));
-      super(fn.parameters, fn.block, scope);
+      super(fn.name, fn.parameters, fn.block, scope);
   }
   isBound () {
     return true;
@@ -66,4 +70,4 @@ class BoundInitialiserFunction extends BoundFunction {
   }
 }
 
-export default Function;
+export default LoxFunction;

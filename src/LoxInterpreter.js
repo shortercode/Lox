@@ -1,25 +1,42 @@
 import { Walker } from "../lib/Pratt.js";
-import Function from "./Function.js";
+import LoxFunction from "./Function.js";
 import Class from "./Class.js";
 import RuntimeError from "./RuntimeError.js";
 import Instance from "./Instance.js";
+
+const ensureNumber = a => {
+    if (typeof a != "number")
+        throw new RuntimeError("Operand must be a number.");
+}
+const ensureNumbers = (a, b) => {
+    if (typeof a != "number" || typeof b != "number")
+        throw new RuntimeError("Operands must be numbers.");
+}
+
+const ensureNumbersOrStrings = (a, b) => {
+    const A = typeof a, B = typeof b;
+    if (A != B)
+        throw new RuntimeError("Operands must be two numbers or two strings.");
+    if (A != "string" && A != "number")
+        throw new RuntimeError("Operands must be two numbers or two strings.");
+};
 
 const binary = new Map(Object.entries({
     ",": (a, b) => b,
     "==": (a, b) =>  a === b,
     "!=": (a, b) => a !== b,
-    "+": (a, b) => a + b,
-    "-": (a, b) => a - b,
-    "/": (a, b) => a / b,
-    "*": (a, b) => a * b,
-    "<": (a, b) => a < b,
-    ">": (a, b) => a > b,
-    "<=": (a, b) => a <= b,
-    ">=": (a, b) => a >= b
+    "+": (a, b) => (ensureNumbersOrStrings(a, b), a + b),
+    "-": (a, b) => (ensureNumbers(a, b), a - b),
+    "/": (a, b) => (ensureNumbers(a, b), a / b),
+    "*": (a, b) => (ensureNumbers(a, b), a * b),
+    "<": (a, b) => (ensureNumbers(a, b), a < b),
+    ">": (a, b) => (ensureNumbers(a, b), a > b),
+    "<=": (a, b) => (ensureNumbers(a, b), a <= b),
+    ">=": (a, b) => (ensureNumbers(a, b), a >= b)
 }));
 
 const unary = new Map(Object.entries({
-    "minus": a => -a,
+    "minus": a => (ensureNumber(a), -a),
     "!": a => !isTruthy(a)
 }));
 
@@ -92,7 +109,7 @@ export default class LoxInterpreter extends Walker {
     }
     walkFunction (stmt, ctx) {
         const { parameters, block, name } = stmt;
-        const fn = new Function(parameters, block, ctx.copyScope());
+        const fn = new LoxFunction(name, parameters, block, ctx.copyScope());
         ctx.set(name, stmt, fn);
     }
     walkClass (stmt, ctx) {
@@ -112,7 +129,7 @@ export default class LoxInterpreter extends Walker {
 
         for (const method of methods) {
             const { parameters, name, block } = method;
-            const fn = new Function(parameters, block, scope);
+            const fn = new LoxFunction(name, parameters, block, scope);
             definitions.push([ name, fn ]);
         }
 
@@ -138,13 +155,13 @@ export default class LoxInterpreter extends Walker {
     walkIf (stmt, ctx) {
         const { condition, thenStatement, elseStatement } = stmt;
         const test = this.walkExpression(condition, ctx);
-        const result = test ? thenStatement : elseStatement;
+        const result = isTruthy(test) ? thenStatement : elseStatement;
         this.walkStatement(result, ctx);
     }
     walkWhile (stmt, ctx) {
         const { condition, thenStatement } = stmt;
         ctx.push();
-        while (this.walkExpression(condition, ctx)) {
+        while (isTruthy(this.walkExpression(condition, ctx))) {
             ctx.push();
             this.walkStatement(thenStatement, ctx);
             ctx.pop();
@@ -159,7 +176,7 @@ export default class LoxInterpreter extends Walker {
         ctx.push();
         this.walkStatement(setup, ctx);
 
-        while (this.walkStatement(condition, ctx)) {
+        while (isTruthy(this.walkStatement(condition, ctx))) {
             ctx.push();
             this.walkStatement(thenStatement, ctx);
             ctx.pop();
@@ -269,7 +286,7 @@ export default class LoxInterpreter extends Walker {
 
         const values = args.map(arg => this.walkExpression(arg, ctx));
 
-        if (fn instanceof Function)
+        if (fn instanceof LoxFunction)
             return ctx.callFunction(fn, values, this.boundWalkStatement);
 
         else if (fn instanceof Class) {
@@ -294,7 +311,7 @@ export default class LoxInterpreter extends Walker {
         const superClass = inst.class.superClass;
         assert(superClass instanceof Class, `no superClass`); // TODO improve error message
         const property = superClass.get(expr);
-        assert(property instanceof Function, "expected Function"); // TODO improve error message
+        assert(property instanceof LoxFunction, "expected Function"); // TODO improve error message
         return property.bind(inst);
     }
 }
