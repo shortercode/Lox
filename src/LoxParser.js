@@ -1,4 +1,5 @@
 import { Parser } from "../lib/Pratt.js";
+import RuntimeError from "./RuntimeError.js";
 
 export default class LoxParser extends Parser {
     constructor () {
@@ -62,7 +63,7 @@ export default class LoxParser extends Parser {
             case "function":
             case "class":
             case "variable":
-                throw new Error("Expect expression");
+                throw new Error("Expect expression.");
                 break;
             default:
                 return stmt;
@@ -87,10 +88,15 @@ export default class LoxParser extends Parser {
 
         this.ensure(tokens, "symbol:)");
 
-        const block = this.parseBlock(tokens);
-        const end = tokens.previous().end;
+        if (this.match(tokens, "symbol:{")) {
+            // tokens.back();
+            const block = this.parseBlock(tokens);
+            const end = tokens.previous().end;
 
-        return this.createNode("function", start, end, { name, parameters, block });
+            return this.createNode("function", start, end, { name, parameters, block });
+        }
+        else
+            throw new RuntimeError("Expect '{' before function body.");
     }
     parseClassStmt (tokens) {
         const start = tokens.previous().start;
@@ -251,30 +257,61 @@ export default class LoxParser extends Parser {
         let condition = null;
         let step = null;
 
-        if (this.match(tokens, "identifier:var") || this.match(tokens, "symbol:;")) {
-            setup = this.parseStatement(tokens); // either variable or blank
-        }
-        else {
-            let expr = this.parseExpression(tokens);
-            setup = this.createNode("expression", expr.start, expr.end, expr);
-            this.endStatement(tokens);
+        setup = this.parseStatement(tokens);
+
+        switch (setup.type) {
+            case "variable":
+            case "blank":
+            case "expression":
+                break;
+            default:
+                throw new RuntimeError("Expect expression.");
         }
 
 
         if (this.match(tokens, "symbol:;")) {
             tokens.next();
-            condition = this.parseBlank(tokens);
+            const position = tokens.peek().start;
+            condition = this.createNode(
+                "expression",
+                position,
+                position,
+                this.createNode("boolean", position, position, "true")
+            );
         }
         else {
-            let expr = this.parseExpression(tokens);
-            condition = this.createNode("expression", expr.start, expr.end, expr);
-            this.endStatement(tokens);
+            condition = this.parseStatement(tokens);
+
+            if (condition.type !== "expression")
+                throw new RuntimeError("Expect expression.");
         }
 
         if (this.match(tokens, "symbol:)")) {
             step = this.parseBlank(tokens);
         }
         else {
+            const next = tokens.peek();
+
+            if (next) {
+                const { type, value } = next;
+                if (type === "identifier") {
+                    if (value === "fun" 
+                        || value === "class" 
+                        || value === "var" 
+                        || value === "return"
+                        || value === "print"
+                        || value === "if"
+                        || value === "while"
+                        || value === "for"
+                    )
+                        throw new RuntimeError("Expect expression.");
+                }
+                else if (type === "symbol") {
+                    if (value === "{" || value === ";")
+                        throw new RuntimeError("Expect expression.");
+                }
+            }
+
             let expr = this.parseExpression(tokens);
             step = this.createNode("expression", expr.start, expr.end, expr);
         }
