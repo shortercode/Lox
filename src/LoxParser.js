@@ -82,8 +82,10 @@ export default class LoxParser extends Parser {
 
             if (this.match(tokens, "symbol:,"))
                 tokens.next();
-            else
+            else if (this.match(tokens, "symbol:)"))
                 break;
+            else
+                throw new RuntimeError("Expect ')' after parameters.");
         }
 
         this.ensure(tokens, "symbol:)");
@@ -130,8 +132,10 @@ export default class LoxParser extends Parser {
 
                         if (this.match(tokens, "symbol:,"))
                             tokens.next();
-                        else
+                        else if (this.match(tokens, "symbol:)"))
                             break;
+                        else
+                            throw new RuntimeError("Expect ')' after parameters.");
                     }
                 }
 
@@ -335,7 +339,9 @@ export default class LoxParser extends Parser {
         return this.parseBlock(tokens);
     }
     parseBlank (tokens) {
-        const position = tokens.peek().start;
+        // no guarentee that there will be a next token, so just use the last
+        // position
+        const position = tokens.previous().end;
         return this.createNode("blank", position, position, null);
     }
     parseBlock (tokens) {
