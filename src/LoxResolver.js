@@ -59,19 +59,33 @@ export default class LoxResolver extends Walker {
         return ctx.lookup;
     }
     walkModule (stmts, ctx) {
+        this.hoistCallablesInBlock(stmts, ctx);
         for (const stmt of stmts) {
             this.walkStatement(stmt, ctx);
         }
     }
-    walkFunction (stmt, ctx) {
-        const { parameters, block, name } = stmt;
+    hoistCallablesInBlock (stmts, ctx) {
+        for (const stmt of stmts) {
+            const { type, data } = stmt;
+            if (type === "class" || type === "function")
+                this.hoistCallable(data, ctx);
+        }
+    }
+    hoistCallable (stmt, ctx) {
+        const name = stmt.name;
         ctx.declare(name);
         ctx.define(name);
         ctx.resolveLocal(stmt, name);
+    }
+    walkFunction (stmt, ctx) {
+        const { parameters, block } = stmt;
         ctx.push();
 
         const oldFnType = ctx.functionType;
         ctx.functionType = "function";
+
+        if (parameters.length > 8)
+            throw new Error("Cannot have more than 8 parameters.");
 
         for (const param of parameters) {
             ctx.declare(param);
@@ -83,9 +97,7 @@ export default class LoxResolver extends Walker {
         ctx.pop();
     }
     walkClass (stmt, ctx) {
-        const { name, superClass, methods } = stmt;
-        ctx.declare(name);
-        ctx.define(name);
+        const { superClass, methods } = stmt;
         ctx.push();
         ctx.declare("this");
         ctx.define("this");
@@ -101,6 +113,9 @@ export default class LoxResolver extends Walker {
             const oldFnType = ctx.functionType;
             ctx.functionType = fnType;
 
+            if (parameters.length > 8)
+                throw new Error("Cannot have more than 8 parameters.");
+
             for (const param of parameters) {
                 ctx.declare(param);
                 ctx.define(param);
@@ -111,8 +126,6 @@ export default class LoxResolver extends Walker {
             ctx.pop();
         }
         ctx.pop();
-
-        ctx.resolveLocal(stmt, name);
     }
     walkVariable (stmt, ctx) {
         const { initialiser, name } = stmt;
@@ -163,6 +176,7 @@ export default class LoxResolver extends Walker {
     }
     walkBlock (stmt, ctx) {
         ctx.push();
+        this.hoistCallablesInBlock(stmt, ctx);
         for (const sub of stmt) {
             this.walkStatement(sub, ctx);
         }
@@ -208,6 +222,9 @@ export default class LoxResolver extends Walker {
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;
         this.walkExpression(left, ctx);
+
+        if (args.length > 255)
+            throw new Error("Cannot have more than 255 arguments.");
 
         args.map(arg => this.walkExpression(arg, ctx));
     }
