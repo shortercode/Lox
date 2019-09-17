@@ -1,6 +1,25 @@
 import { Parser } from "../lib/Pratt.js";
 import RuntimeError from "./RuntimeError.js";
 
+const RESERVED_NAMES = new Set([
+   "fun",
+   "class",
+   "var",
+   "return",
+   "print",
+   "if",
+   "else",
+   "while",
+   "for",
+   "and",
+   "or",
+   "true",
+   "false",
+   "this",
+   "nil",
+   "super" 
+]);
+
 export default class LoxParser extends Parser {
     constructor () {
         super();
@@ -75,6 +94,9 @@ export default class LoxParser extends Parser {
         const parameters = [];
         this.ensure(tokens, "symbol:(");
 
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect function name.");
+
         while (!this.match(tokens, "symbol:)"))
         {
             const param = this.ensure(tokens, "identifier:");
@@ -106,9 +128,15 @@ export default class LoxParser extends Parser {
         const methods = [];
         let superClass = null;
 
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect class name.");
+
         if (this.match(tokens, "symbol:<"))
         {
             tokens.next();
+            if (!this.match(tokens, "identifier:")) 
+                throw new RuntimeError("Expect superclass name.");
+                
             superClass = {
                 name: this.ensure(tokens, "identifier:")
             };
@@ -159,6 +187,9 @@ export default class LoxParser extends Parser {
         const start = tokens.previous().start;
         const name = this.ensure(tokens, "identifier:");
         let initialiser;
+
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect variable name.");
     
         if (this.match(tokens, "symbol:=")) {
             tokens.next();
@@ -193,7 +224,7 @@ export default class LoxParser extends Parser {
         if (!this.shouldEndStatement(tokens))
             expression = this.parseExpression(tokens);
         else
-            expression = this.parseBlank(tokens);
+            throw new RuntimeError("Expect expression.");
 
         this.endStatement(tokens);
         const end = tokens.previous().end;
@@ -396,9 +427,10 @@ export default class LoxParser extends Parser {
 
             if (this.match(tokens, "symbol:,"))
                 tokens.next();
-
-            else
+            else if (this.match(tokens, "symbol:)"))
                 break;
+            else
+                throw new RuntimeError("Expect ')' after arguments.");
         }
 
         this.ensure(tokens, "symbol:)");
@@ -417,6 +449,9 @@ export default class LoxParser extends Parser {
     }
     parseMemberExpression (tokens, left) {
         const start = tokens.previous().start;
+        if (!this.match(tokens, "identifier:")) {
+            throw new RuntimeError("Expect property name after '.'.");
+        }
         const name = this.ensure(tokens, "identifier:");
         const end = tokens.previous().end;
 
@@ -446,10 +481,16 @@ export default class LoxParser extends Parser {
     }
     parseSuperExpression (tokens) {
         const start = tokens.previous().start;
-        this.ensure(tokens, "symbol:.");
+        if (!this.match(tokens, "symbol:."))
+            throw new RuntimeError("Expect '.' after 'super'.");
+        tokens.next();
+        if (!this.match(tokens, "identifier:"))
+            throw new RuntimeError("Expect superclass method name.");
         const name = this.ensure(tokens, "identifier:");
         const end = tokens.previous().end;
 
-        return this.createNode("super", start, end, name);
+        return this.createNode("super", start, end, {
+            name
+        });
     }
 }
