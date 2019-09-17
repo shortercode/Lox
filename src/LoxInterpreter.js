@@ -115,7 +115,6 @@ export default class LoxInterpreter extends Walker {
     walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;
         const definitions = [];
-        const scope = ctx.copyScope();
         let parent = null;
 
         if (superClass) {
@@ -123,9 +122,14 @@ export default class LoxInterpreter extends Walker {
             if (superName === name)
                 throw new RuntimeError(`A class cannot inherit from itself.`);
             parent = ctx.get(superName, superClass);
-            if (!parent)
-                RuntimeError.undefined(superName);
+
+            if (parent instanceof Class == false)
+                throw new RuntimeError("Superclass must be a class.");
+            ctx.push();
+            ctx.scope[0].set("super", parent);
         }
+
+        const scope = ctx.copyScope();
 
         for (const method of methods) {
             const { parameters, name, block } = method;
@@ -133,8 +137,10 @@ export default class LoxInterpreter extends Walker {
             definitions.push([ name, fn ]);
         }
 
+        if (superClass)
+            ctx.pop();
+
         const ctor = new Class(name, parent, definitions);
-        
         ctx.set(name, stmt, ctor);
     }
     walkVariable (stmt, ctx) {
@@ -149,6 +155,8 @@ export default class LoxInterpreter extends Walker {
         const result = this.walkExpression(stmt, ctx);
         if (result == null)
             ctx.print("nil");
+        else if (Object.is(result, -0))
+            ctx.print("-0");
         else
             ctx.print(result.toString());
     }
@@ -202,11 +210,11 @@ export default class LoxInterpreter extends Walker {
         // both "or" and "and" are shortcircuit style operators
         switch (operator) {
             case "or": {
-                    if (isTruthy(a)) return true;
+                    if (isTruthy(a)) return a;
                     return this.walkExpression(right, ctx);
                 }
             case "and": {
-                    if (!isTruthy(a)) return false;
+                    if (!isTruthy(a)) return a;
                     return this.walkExpression(right, ctx);
                 }
         }
@@ -305,13 +313,16 @@ export default class LoxInterpreter extends Walker {
             throw new RuntimeError(`Can only call functions and classes.`);
     }
     walkSuperExpression (expr, ctx) {
-        // TODO fix this
-        const inst = ctx.get("this");
-        assert(inst instanceof Instance, `invalid context`); // TODO improve error message
-        const superClass = inst.class.superClass;
-        assert(superClass instanceof Class, `no superClass`); // TODO improve error message
-        const property = superClass.get(expr);
-        assert(property instanceof LoxFunction, "expected Function"); // TODO improve error message
+        const superclass = ctx.get("super", expr);
+        const property = superclass.get(expr.name);
+        assert(property instanceof LoxFunction, `Undefined property '${expr.name}'.`); // TODO improve error message
+        
+        // we have nothing to use to resolve the location of "this"
+        // however we know that it exists 1 environment closer than super
+        // so we resolve the scope with an offset, then look in that
+        const scope = ctx.resolve(expr, -1);
+        const inst = scope.get("this");
+
         return property.bind(inst);
     }
 }
