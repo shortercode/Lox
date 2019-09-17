@@ -6,14 +6,15 @@ export default class Instance {
     this.properties = new Map;
     this.class = cls;
   }
-  get (name, allowNull = false) {
-    let p = this.properties.get(name);
-
-    if (typeof p === "undefined")
+  get (name, allowUndefined = false) {
+    let p;
+    if (this.properties.has(name))
+      p = this.properties.get(name);
+    else
       p = this.class.get(name);
 
-    if (p == null) {
-      if (allowNull)
+    if (p === undefined) {
+      if (allowUndefined)
         return p;
       else
         throw new RuntimeError(`Undefined property '${name}'.`);
