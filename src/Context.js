@@ -48,10 +48,10 @@ export default class Context {
     shouldReturn () {
         return this.callStack !== null && this.callStack.complete;
     }
-    resolve (expr) {
+    resolve (expr, offset = 0) {
         const distance = this.variableMapping.get(expr);
         if (distance != null)
-            return this.scope[distance];
+            return this.scope[distance + offset];
         else
             return this.global;
     }
