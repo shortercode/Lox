@@ -356,7 +356,7 @@ class Scanner {
                     }
                 }
             }
-            else {
+            else if (source.incomplete()){
                 source.back();
             }
         }
@@ -670,6 +670,8 @@ class Parser {
         const token = tokens.peek();
         const [ type, value ] = this.readLabel(label);
 
+        if (!token) return false;
+
         return token.match(type, value);
     }
 
@@ -743,11 +745,15 @@ class RuntimeError extends Error {
   }
 }
 
-class Function {
-  constructor (parameters, block, scope) {
+class LoxFunction {
+  constructor (name, parameters, block, scope) {
       this.parameters = parameters;
       this.block = block;
       this.scope = scope;
+      this.name = name;
+  }
+  toString () {
+    return `<fn ${this.name}>`;
   }
   isBound () {
     return false;
@@ -773,12 +779,20 @@ class Function {
 
     const env = newScope[0];
 
+    if (this instanceof BoundFunction) {
+      env.set("this", this.instance);
+    }
+
     for (let i = 0; i < a; i++) {
       const name = this.parameters[i];
       env.set(name, args[i]);
     }
 
-    walkStmt(this.block, ctx);
+    for (const stmt of this.block.data) {
+      walkStmt(stmt, ctx);
+      if (ctx.shouldReturn())
+          break;
+    }
 
     ctx.pop();
     ctx.swapScope(oldScope);
@@ -787,11 +801,10 @@ class Function {
   }
 }
 
-class BoundFunction extends Function {
+class BoundFunction extends LoxFunction {
   constructor (fn, inst) {
-      const scope = fn.scope.slice(0);
-      scope.unshift(new Map([["this", inst]]));
-      super(fn.parameters, fn.block, scope);
+      super(fn.name, fn.parameters, fn.block, fn.scope);
+      this.instance = inst;
   }
   isBound () {
     return true;
@@ -801,11 +814,9 @@ class BoundFunction extends Function {
 class BoundInitialiserFunction extends BoundFunction {
   call (args, ctx, walkStmt) {
     const returnValue = super.call(args, ctx, walkStmt);
-    const inst = this.scope[0].get("this");
-
     if (returnValue != null)
       throw new RuntimeError("Cannot return a value from an initializer.");
-    return inst; 
+    return this.instance; 
   }
 }
 
@@ -828,20 +839,21 @@ class Instance {
     this.properties = new Map;
     this.class = cls;
   }
-  get (name, allowNull = false) {
-    let p = this.properties.get(name);
-
-    if (typeof p === "undefined")
+  get (name, allowUndefined = false) {
+    let p;
+    if (this.properties.has(name))
+      p = this.properties.get(name);
+    else
       p = this.class.get(name);
 
-    if (p == null) {
-      if (allowNull)
+    if (p === undefined) {
+      if (allowUndefined)
         return p;
       else
         throw new RuntimeError(`Undefined property '${name}'.`);
     } 
 
-    if (p instanceof Function) {
+    if (p instanceof LoxFunction) {
       if (p.isBound())
         return p;
       if (name === "init")
@@ -860,22 +872,39 @@ class Instance {
   }
 }
 
+const ensureNumber = a => {
+    if (typeof a != "number")
+        throw new RuntimeError("Operand must be a number.");
+};
+const ensureNumbers = (a, b) => {
+    if (typeof a != "number" || typeof b != "number")
+        throw new RuntimeError("Operands must be numbers.");
+};
+
+const ensureNumbersOrStrings = (a, b) => {
+    const A = typeof a, B = typeof b;
+    if (A != B)
+        throw new RuntimeError("Operands must be two numbers or two strings.");
+    if (A != "string" && A != "number")
+        throw new RuntimeError("Operands must be two numbers or two strings.");
+};
+
 const binary = new Map(Object.entries({
     ",": (a, b) => b,
     "==": (a, b) =>  a === b,
     "!=": (a, b) => a !== b,
-    "+": (a, b) => a + b,
-    "-": (a, b) => a - b,
-    "/": (a, b) => a / b,
-    "*": (a, b) => a * b,
-    "<": (a, b) => a < b,
-    ">": (a, b) => a > b,
-    "<=": (a, b) => a <= b,
-    ">=": (a, b) => a >= b
+    "+": (a, b) => (ensureNumbersOrStrings(a, b), a + b),
+    "-": (a, b) => (ensureNumbers(a, b), a - b),
+    "/": (a, b) => (ensureNumbers(a, b), a / b),
+    "*": (a, b) => (ensureNumbers(a, b), a * b),
+    "<": (a, b) => (ensureNumbers(a, b), a < b),
+    ">": (a, b) => (ensureNumbers(a, b), a > b),
+    "<=": (a, b) => (ensureNumbers(a, b), a <= b),
+    ">=": (a, b) => (ensureNumbers(a, b), a >= b)
 }));
 
 const unary = new Map(Object.entries({
-    "minus": a => -a,
+    "minus": a => (ensureNumber(a), -a),
     "!": a => !isTruthy(a)
 }));
 
@@ -948,13 +977,12 @@ class LoxInterpreter extends Walker {
     }
     walkFunction (stmt, ctx) {
         const { parameters, block, name } = stmt;
-        const fn = new Function(parameters, block, ctx.copyScope());
+        const fn = new LoxFunction(name, parameters, block, ctx.copyScope());
         ctx.set(name, stmt, fn);
     }
     walkClass (stmt, ctx) {
         const { name, superClass, methods } = stmt;
         const definitions = [];
-        const scope = ctx.copyScope();
         let parent = null;
 
         if (superClass) {
@@ -962,18 +990,25 @@ class LoxInterpreter extends Walker {
             if (superName === name)
                 throw new RuntimeError(`A class cannot inherit from itself.`);
             parent = ctx.get(superName, superClass);
-            if (!parent)
-                RuntimeError.undefined(superName);
+
+            if (parent instanceof Class == false)
+                throw new RuntimeError("Superclass must be a class.");
+            ctx.push();
+            ctx.scope[0].set("super", parent);
         }
+
+        const scope = ctx.copyScope();
 
         for (const method of methods) {
             const { parameters, name, block } = method;
-            const fn = new Function(parameters, block, scope);
+            const fn = new LoxFunction(name, parameters, block, scope);
             definitions.push([ name, fn ]);
         }
 
+        if (superClass)
+            ctx.pop();
+
         const ctor = new Class(name, parent, definitions);
-        
         ctx.set(name, stmt, ctor);
     }
     walkVariable (stmt, ctx) {
@@ -988,19 +1023,21 @@ class LoxInterpreter extends Walker {
         const result = this.walkExpression(stmt, ctx);
         if (result == null)
             ctx.print("nil");
+        else if (Object.is(result, -0))
+            ctx.print("-0");
         else
             ctx.print(result.toString());
     }
     walkIf (stmt, ctx) {
         const { condition, thenStatement, elseStatement } = stmt;
         const test = this.walkExpression(condition, ctx);
-        const result = test ? thenStatement : elseStatement;
+        const result = isTruthy(test) ? thenStatement : elseStatement;
         this.walkStatement(result, ctx);
     }
     walkWhile (stmt, ctx) {
         const { condition, thenStatement } = stmt;
         ctx.push();
-        while (this.walkExpression(condition, ctx)) {
+        while (isTruthy(this.walkExpression(condition, ctx))) {
             ctx.push();
             this.walkStatement(thenStatement, ctx);
             ctx.pop();
@@ -1015,7 +1052,7 @@ class LoxInterpreter extends Walker {
         ctx.push();
         this.walkStatement(setup, ctx);
 
-        while (this.walkStatement(condition, ctx)) {
+        while (isTruthy(this.walkStatement(condition, ctx))) {
             ctx.push();
             this.walkStatement(thenStatement, ctx);
             ctx.pop();
@@ -1041,11 +1078,11 @@ class LoxInterpreter extends Walker {
         // both "or" and "and" are shortcircuit style operators
         switch (operator) {
             case "or": {
-                    if (isTruthy(a)) return true;
+                    if (isTruthy(a)) return a;
                     return this.walkExpression(right, ctx);
                 }
             case "and": {
-                    if (!isTruthy(a)) return false;
+                    if (!isTruthy(a)) return a;
                     return this.walkExpression(right, ctx);
                 }
         }
@@ -1125,7 +1162,7 @@ class LoxInterpreter extends Walker {
 
         const values = args.map(arg => this.walkExpression(arg, ctx));
 
-        if (fn instanceof Function)
+        if (fn instanceof LoxFunction)
             return ctx.callFunction(fn, values, this.boundWalkStatement);
 
         else if (fn instanceof Class) {
@@ -1144,16 +1181,38 @@ class LoxInterpreter extends Walker {
             throw new RuntimeError(`Can only call functions and classes.`);
     }
     walkSuperExpression (expr, ctx) {
-        // TODO fix this
-        const inst = ctx.get("this");
-        assert(inst instanceof Instance, `invalid context`); // TODO improve error message
-        const superClass = inst.class.superClass;
-        assert(superClass instanceof Class, `no superClass`); // TODO improve error message
-        const property = superClass.get(expr);
-        assert(property instanceof Function, "expected Function"); // TODO improve error message
+        const superclass = ctx.get("super", expr);
+        const property = superclass.get(expr.name);
+        assert(property instanceof LoxFunction, `Undefined property '${expr.name}'.`); // TODO improve error message
+        
+        // we have nothing to use to resolve the location of "this"
+        // however we know that it exists 1 environment closer than super
+        // so we resolve the scope with an offset, then look in that
+        const scope = ctx.resolve(expr, -1);
+        const inst = scope.get("this");
+
         return property.bind(inst);
     }
 }
+
+const RESERVED_NAMES = new Set([
+   "fun",
+   "class",
+   "var",
+   "return",
+   "print",
+   "if",
+   "else",
+   "while",
+   "for",
+   "and",
+   "or",
+   "true",
+   "false",
+   "this",
+   "nil",
+   "super" 
+]);
 
 class LoxParser extends Parser {
     constructor () {
@@ -1229,6 +1288,9 @@ class LoxParser extends Parser {
         const parameters = [];
         this.ensure(tokens, "symbol:(");
 
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect function name.");
+
         while (!this.match(tokens, "symbol:)"))
         {
             const param = this.ensure(tokens, "identifier:");
@@ -1236,8 +1298,10 @@ class LoxParser extends Parser {
 
             if (this.match(tokens, "symbol:,"))
                 tokens.next();
-            else
+            else if (this.match(tokens, "symbol:)"))
                 break;
+            else
+                throw new RuntimeError("Expect ')' after parameters.");
         }
 
         this.ensure(tokens, "symbol:)");
@@ -1258,9 +1322,15 @@ class LoxParser extends Parser {
         const methods = [];
         let superClass = null;
 
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect class name.");
+
         if (this.match(tokens, "symbol:<"))
         {
             tokens.next();
+            if (!this.match(tokens, "identifier:")) 
+                throw new RuntimeError("Expect superclass name.");
+                
             superClass = {
                 name: this.ensure(tokens, "identifier:")
             };
@@ -1284,8 +1354,10 @@ class LoxParser extends Parser {
 
                         if (this.match(tokens, "symbol:,"))
                             tokens.next();
-                        else
+                        else if (this.match(tokens, "symbol:)"))
                             break;
+                        else
+                            throw new RuntimeError("Expect ')' after parameters.");
                     }
                 }
 
@@ -1309,6 +1381,9 @@ class LoxParser extends Parser {
         const start = tokens.previous().start;
         const name = this.ensure(tokens, "identifier:");
         let initialiser;
+
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect variable name.");
     
         if (this.match(tokens, "symbol:=")) {
             tokens.next();
@@ -1343,7 +1418,7 @@ class LoxParser extends Parser {
         if (!this.shouldEndStatement(tokens))
             expression = this.parseExpression(tokens);
         else
-            expression = this.parseBlank(tokens);
+            throw new RuntimeError("Expect expression.");
 
         this.endStatement(tokens);
         const end = tokens.previous().end;
@@ -1422,15 +1497,6 @@ class LoxParser extends Parser {
                 throw new RuntimeError("Expect expression.");
         }
 
-        // if (this.match(tokens, "identifier:var") || this.match(tokens, "symbol:;")) {
-        //     setup = this.parseStatement(tokens); // either variable or blank
-        // }
-        // else {
-        //     let expr = this.parseExpression(tokens);
-        //     setup = this.createNode("exmakepression", expr.start, expr.end, expr);
-        //     this.endStatement(tokens);
-        // }
-
 
         if (this.match(tokens, "symbol:;")) {
             tokens.next();
@@ -1447,10 +1513,6 @@ class LoxParser extends Parser {
 
             if (condition.type !== "expression")
                 throw new RuntimeError("Expect expression.");
-
-            // let expr = this.parseExpression(tokens);
-            // condition = this.createNode("expression", expr.start, expr.end, expr);
-            // this.endStatement(tokens);
         }
 
         if (this.match(tokens, "symbol:)")) {
@@ -1502,7 +1564,9 @@ class LoxParser extends Parser {
         return this.parseBlock(tokens);
     }
     parseBlank (tokens) {
-        const position = tokens.peek().start;
+        // no guarentee that there will be a next token, so just use the last
+        // position
+        const position = tokens.previous().end;
         return this.createNode("blank", position, position, null);
     }
     parseBlock (tokens) {
@@ -1557,9 +1621,10 @@ class LoxParser extends Parser {
 
             if (this.match(tokens, "symbol:,"))
                 tokens.next();
-
-            else
+            else if (this.match(tokens, "symbol:)"))
                 break;
+            else
+                throw new RuntimeError("Expect ')' after arguments.");
         }
 
         this.ensure(tokens, "symbol:)");
@@ -1578,6 +1643,9 @@ class LoxParser extends Parser {
     }
     parseMemberExpression (tokens, left) {
         const start = tokens.previous().start;
+        if (!this.match(tokens, "identifier:")) {
+            throw new RuntimeError("Expect property name after '.'.");
+        }
         const name = this.ensure(tokens, "identifier:");
         const end = tokens.previous().end;
 
@@ -1607,11 +1675,17 @@ class LoxParser extends Parser {
     }
     parseSuperExpression (tokens) {
         const start = tokens.previous().start;
-        this.ensure(tokens, "symbol:.");
+        if (!this.match(tokens, "symbol:."))
+            throw new RuntimeError("Expect '.' after 'super'.");
+        tokens.next();
+        if (!this.match(tokens, "identifier:"))
+            throw new RuntimeError("Expect superclass method name.");
         const name = this.ensure(tokens, "identifier:");
         const end = tokens.previous().end;
 
-        return this.createNode("super", start, end, name);
+        return this.createNode("super", start, end, {
+            name
+        });
     }
 }
 
@@ -1675,10 +1749,10 @@ class Context {
     shouldReturn () {
         return this.callStack !== null && this.callStack.complete;
     }
-    resolve (expr) {
+    resolve (expr, offset = 0) {
         const distance = this.variableMapping.get(expr);
         if (distance != null)
-            return this.scope[distance];
+            return this.scope[distance + offset];
         else
             return this.global;
     }
@@ -1696,13 +1770,16 @@ class Context {
     }
 }
 
-class NativeFunction extends Function {
+class NativeFunction extends LoxFunction {
   constructor (parameters, method) {
-      super(parameters, null, null);
+      super("", parameters, null, null);
       this.method = method;
   }
+  toString () {
+    return "<native fn>";
+  }
   call (args, ctx, walkStmt) {
-      this.method(args);
+      return this.method(args);
   }
 }
 
@@ -1711,7 +1788,8 @@ class ResolverContext {
     this.stack = [];
     this.globals = new Map;
     this.lookup = new WeakMap;
-
+    
+    this.classType = null;
     this.functionType = null;
 
     for (const name of globals)
@@ -1728,8 +1806,13 @@ class ResolverContext {
   }
   declare (name) {
     const m = this.peek();
-    if (m) m.set(name, false);
-    else this.globals.set(name, false);
+    if (m) {
+      if (m.has(name))
+        throw new RuntimeError("Variable with this name already declared in this scope.");
+      m.set(name, false);
+    }
+    else
+      this.globals.set(name, false);
   }
   define (name) {
     const m = this.peek();
@@ -1740,6 +1823,8 @@ class ResolverContext {
     let i = 0;
     for (const m of this.stack) {
       if (m.has(name)) {
+        if (m.get(name) === false)
+          throw new RuntimeError("Cannot read local variable in its own initializer.");
         this.lookup.set(expr, i);
         return;
       }
@@ -1797,7 +1882,7 @@ class LoxResolver extends Walker {
         this.defineExpression("assignment", this.walkAssignmentExpression);
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.resolveLocal(expr, expr.value));
-        this.defineExpression("context", (expr, ctx) => ctx.resolveLocal(expr, expr.value));
+        this.defineExpression("context", this.walkContextExpression);
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", noop);
     }
@@ -1807,62 +1892,97 @@ class LoxResolver extends Walker {
         return ctx.lookup;
     }
     walkModule (stmts, ctx) {
+        this.hoistCallablesInBlock(stmts, ctx);
         for (const stmt of stmts) {
             this.walkStatement(stmt, ctx);
         }
     }
-    walkFunction (stmt, ctx) {
-        const { parameters, block, name } = stmt;
+    hoistCallablesInBlock (stmts, ctx) {
+        for (const stmt of stmts) {
+            const { type, data } = stmt;
+            if (type === "class" || type === "function")
+                this.hoistCallable(data, ctx);
+        }
+    }
+    hoistCallable (stmt, ctx) {
+        const name = stmt.name;
         ctx.declare(name);
         ctx.define(name);
         ctx.resolveLocal(stmt, name);
+    }
+    walkFunction (stmt, ctx) {
+        const { parameters, block } = stmt;
         ctx.push();
 
         const oldFnType = ctx.functionType;
         ctx.functionType = "function";
 
-        
+        if (parameters.length > 8)
+            throw new Error("Cannot have more than 8 parameters.");
 
         for (const param of parameters) {
             ctx.declare(param);
             ctx.define(param);
         }
-        this.walkStatement(block, ctx);
+        this.walkFunctionBody(block, ctx);
 
         ctx.functionType = oldFnType;
         ctx.pop();
     }
+    walkFunctionBody (stmt, ctx) {
+        const { type, data } = stmt;
+        if (type !== "block")
+            throw new RuntimeError("Invalid function body");
+        
+        this.hoistCallablesInBlock(data, ctx);
+        for (const sub of data) {
+            this.walkStatement(sub, ctx);
+        }
+    }
     walkClass (stmt, ctx) {
-        const { name, superClass, methods } = stmt;
-        ctx.declare(name);
-        ctx.define(name);
-        ctx.push();
-        ctx.declare("this");
-        ctx.define("this");
+        const { superClass, methods } = stmt;
+
+        const oldClassType = ctx.classType;
 
         if (superClass) {
             ctx.resolveLocal(superClass, superClass.name);
+            ctx.classType = "super";
+            ctx.push();
+            ctx.declare("super");
+            ctx.define("super");
         }
+        else {
+            ctx.classType = "class";
+        }
+
         for (const method of methods) {
             const { parameters, block } = method;
             ctx.push();
+
+            ctx.declare("this");
+            ctx.define("this");
 
             const fnType = method.name === "init" ? "init" : "method";
             const oldFnType = ctx.functionType;
             ctx.functionType = fnType;
 
+            if (parameters.length > 8)
+                throw new Error("Cannot have more than 8 parameters.");
+
             for (const param of parameters) {
                 ctx.declare(param);
                 ctx.define(param);
             }
-            this.walkStatement(block, ctx);
+            this.walkFunctionBody(block, ctx);
 
             ctx.functionType = oldFnType;
             ctx.pop();
         }
-        ctx.pop();
 
-        ctx.resolveLocal(stmt, name);
+        if (superClass)
+            ctx.pop();
+            
+        ctx.classType = oldClassType;
     }
     walkVariable (stmt, ctx) {
         const { initialiser, name } = stmt;
@@ -1913,6 +2033,7 @@ class LoxResolver extends Walker {
     }
     walkBlock (stmt, ctx) {
         ctx.push();
+        this.hoistCallablesInBlock(stmt, ctx);
         for (const sub of stmt) {
             this.walkStatement(sub, ctx);
         }
@@ -1959,10 +2080,22 @@ class LoxResolver extends Walker {
         const { left, args } = expr;
         this.walkExpression(left, ctx);
 
+        if (args.length > 255)
+            throw new Error("Cannot have more than 255 arguments.");
+
         args.map(arg => this.walkExpression(arg, ctx));
     }
+    walkContextExpression (expr, ctx) {
+        if (ctx.classType === null)
+            throw new RuntimeError("Cannot use 'this' outside of a class.");
+        ctx.resolveLocal(expr, expr.value);
+    }
     walkSuperExpression (expr, ctx) {
-        
+        if (ctx.classType === null)
+            throw new RuntimeError("Cannot use 'super' outside of a class.");
+        else if (ctx.classType === "class")
+            throw new RuntimeError("Cannot use 'super' in a class with no superclass.");
+        ctx.resolveLocal(expr, "super");
     }
 }
 
