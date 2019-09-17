@@ -2,7 +2,7 @@
 
 let describe, it;
 
-const PAUSE_ON = "./test/field/on_instance.lox";
+const PAUSE_ON = "";
 {
   // state labels
   const READY = "ready", SET = "set", GO = "go"; 
@@ -99,7 +99,7 @@ const assert = require("assert");
 const createLoxIsolate = require("../dist/Lox.js");
 
 async function runTest (location) {
-  const errTest = /\/\/ error at '[^']+'\: (.*)/i;
+  const errTest = /\/\/ .*error at '[^']+'\: (.*)/i;
   const runtimeErrTest = /\/\/ expect runtime error\: (.*)/i;
   const expectTest = /\/\/ expect: (.*)/gi;
   const str = await fs.promises.readFile(location, "utf-8");
@@ -110,7 +110,7 @@ async function runTest (location) {
     debugger;
   try {
     const stdout = [];
-    const isolate = createLoxIsolate(msg => stdout.push(msg));
+    const isolate = createLoxIsolate(msg => stdout.push(...msg.split("\n")));
     isolate(str);
 
     if (!expectError)
@@ -131,12 +131,18 @@ async function runTest (location) {
 }
 
 function main () {
+  const SKIP = new Set([
+    // "benchmark",
+    "scanning",
+    "limit"
+  ]);
   describe(_ => {
     const location = "./test";
     const entries = fs.readdirSync(location);
     for (const entry of entries) {
-      if (entry === "benchmark")
+      if (SKIP.has(entry))
         continue;
+
       const entryLocation = location + "/" + entry;
       const info = fs.statSync(entryLocation);
       if (info.isDirectory()) {
