@@ -8,7 +8,7 @@ export default class NativeFunction extends LoxFunction {
   toString () {
     return "<native fn>";
   }
-  call (args, ctx, walkStmt) {
-      this.method(args);
+  call (args, _ctx, _walkStmt) {
+      return this.method(args);
   }
 }
