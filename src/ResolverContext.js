@@ -6,7 +6,8 @@ export default class ResolverContext {
     this.stack = [];
     this.globals = new Map;
     this.lookup = new WeakMap;
-
+    
+    this.classType = null;
     this.functionType = null;
 
     for (const name of globals)
@@ -23,8 +24,13 @@ export default class ResolverContext {
   }
   declare (name) {
     const m = this.peek();
-    if (m) m.set(name, false);
-    else this.globals.set(name, false);
+    if (m) {
+      if (m.has(name))
+        throw new RuntimeError("Variable with this name already declared in this scope.");
+      m.set(name, false);
+    }
+    else
+      this.globals.set(name, false);
   }
   define (name) {
     const m = this.peek();
@@ -35,6 +41,8 @@ export default class ResolverContext {
     let i = 0;
     for (const m of this.stack) {
       if (m.has(name)) {
+        if (m.get(name) === false)
+          throw new RuntimeError("Cannot read local variable in its own initializer.");
         this.lookup.set(expr, i);
         return;
       }
