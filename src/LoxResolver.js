@@ -49,7 +49,7 @@ export default class LoxResolver extends Walker {
         this.defineExpression("assignment", this.walkAssignmentExpression);
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.resolveLocal(expr, expr.value));
-        this.defineExpression("context", (expr, ctx) => ctx.resolveLocal(expr, expr.value));
+        this.defineExpression("context", this.walkContextExpression);
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", noop);
     }
@@ -91,23 +91,43 @@ export default class LoxResolver extends Walker {
             ctx.declare(param);
             ctx.define(param);
         }
-        this.walkStatement(block, ctx);
+        this.walkFunctionBody(block, ctx);
 
         ctx.functionType = oldFnType;
         ctx.pop();
     }
+    walkFunctionBody (stmt, ctx) {
+        const { type, data } = stmt;
+        if (type !== "block")
+            throw new RuntimeError("Invalid function body");
+        
+        this.hoistCallablesInBlock(data, ctx);
+        for (const sub of data) {
+            this.walkStatement(sub, ctx);
+        }
+    }
     walkClass (stmt, ctx) {
         const { superClass, methods } = stmt;
-        ctx.push();
-        ctx.declare("this");
-        ctx.define("this");
+
+        const oldClassType = ctx.classType;
 
         if (superClass) {
             ctx.resolveLocal(superClass, superClass.name);
+            ctx.classType = "super";
+            ctx.push();
+            ctx.declare("super");
+            ctx.define("super");
         }
+        else {
+            ctx.classType = "class";
+        }
+
         for (const method of methods) {
             const { parameters, block } = method;
             ctx.push();
+
+            ctx.declare("this");
+            ctx.define("this");
 
             const fnType = method.name === "init" ? "init" : "method";
             const oldFnType = ctx.functionType;
@@ -120,12 +140,16 @@ export default class LoxResolver extends Walker {
                 ctx.declare(param);
                 ctx.define(param);
             }
-            this.walkStatement(block, ctx);
+            this.walkFunctionBody(block, ctx);
 
             ctx.functionType = oldFnType;
             ctx.pop();
         }
-        ctx.pop();
+
+        if (superClass)
+            ctx.pop();
+            
+        ctx.classType = oldClassType;
     }
     walkVariable (stmt, ctx) {
         const { initialiser, name } = stmt;
@@ -228,7 +252,16 @@ export default class LoxResolver extends Walker {
 
         args.map(arg => this.walkExpression(arg, ctx));
     }
+    walkContextExpression (expr, ctx) {
+        if (ctx.classType === null)
+            throw new RuntimeError("Cannot use 'this' outside of a class.");
+        ctx.resolveLocal(expr, expr.value)
+    }
     walkSuperExpression (expr, ctx) {
-        
+        if (ctx.classType === null)
+            throw new RuntimeError("Cannot use 'super' outside of a class.");
+        else if (ctx.classType === "class")
+            throw new RuntimeError("Cannot use 'super' in a class with no superclass.");
+        ctx.resolveLocal(expr, "super");
     }
 }
