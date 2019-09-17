@@ -34,12 +34,20 @@ class LoxFunction {
 
     const env = newScope[0];
 
+    if (this instanceof BoundFunction) {
+      env.set("this", this.instance);
+    }
+
     for (let i = 0; i < a; i++) {
       const name = this.parameters[i];
       env.set(name, args[i]);
     }
 
-    walkStmt(this.block, ctx);
+    for (const stmt of this.block.data) {
+      walkStmt(stmt, ctx);
+      if (ctx.shouldReturn())
+          break;
+    }
 
     ctx.pop();
     ctx.swapScope(oldScope);
@@ -50,9 +58,8 @@ class LoxFunction {
 
 class BoundFunction extends LoxFunction {
   constructor (fn, inst) {
-      const scope = fn.scope.slice(0);
-      scope.unshift(new Map([["this", inst]]));
-      super(fn.name, fn.parameters, fn.block, scope);
+      super(fn.name, fn.parameters, fn.block, fn.scope);
+      this.instance = inst;
   }
   isBound () {
     return true;
@@ -62,11 +69,9 @@ class BoundFunction extends LoxFunction {
 class BoundInitialiserFunction extends BoundFunction {
   call (args, ctx, walkStmt) {
     const returnValue = super.call(args, ctx, walkStmt);
-    const inst = this.scope[0].get("this");
-
     if (returnValue != null)
       throw new RuntimeError("Cannot return a value from an initializer.");
-    return inst; 
+    return this.instance; 
   }
 }
 
