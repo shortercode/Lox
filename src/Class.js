@@ -5,7 +5,7 @@ export default class Class {
       this.superClass = superClass;
   }
   get (name) {
-    return this.definitions.get(name) || (this.superClass ? this.superClass.get(name) : null);
+    return this.definitions.get(name) || (this.superClass ? this.superClass.get(name) : undefined);
   }
   toString () {
     return this.name;
