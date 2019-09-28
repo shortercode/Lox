@@ -939,6 +939,7 @@ class LoxInterpreter extends Walker {
         this.defineStatement("blank", (stmt, ctx) => {});
 
         this.defineExpression(",",  (expr, ctx) => this.walkBinaryExpression(",",   expr, ctx));
+        this.defineExpression("?",  this.walkConditionalExpression);
         this.defineExpression("or", (expr, ctx) => this.walkLogicalBinaryExpression("or",   expr, ctx));
         this.defineExpression("and",(expr, ctx) => this.walkLogicalBinaryExpression("and",   expr, ctx));
         this.defineExpression("==", (expr, ctx) => this.walkBinaryExpression("==",  expr, ctx));
@@ -964,6 +965,7 @@ class LoxInterpreter extends Walker {
         this.defineExpression("set", this.walkSetExpression);
         this.defineExpression("computed-set", this.walkComputedSetExpression);
         this.defineExpression("assignment", this.walkAssignmentExpression);
+        this.defineExpression("?",  this.walkConditionalExpression);
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.get(expr.value, expr));
         this.defineExpression("context", (expr, ctx) => ctx.get(expr.value, expr));
@@ -1156,6 +1158,13 @@ class LoxInterpreter extends Walker {
 
         return value;
     }
+    walkConditionalExpression (expr, ctx) {
+        const { condition, thenExpr, elseExpr } = expr;
+        if (isTruthy(this.walkExpression(condition, ctx)))
+            return this.walkExpression(thenExpr, ctx);
+        else
+            return this.walkExpression(elseExpr, ctx);
+    }
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;
         const fn = this.walkExpression(left, ctx);
@@ -1227,48 +1236,49 @@ class LoxParser extends Parser {
         this.addStatement("identifier:for",     this.parseForStmt);
         this.addStatement("symbol:{",           this.parseBlockStmt);
         this.addStatement("symbol:;",           this.parseBlank);
-
         // sequence
         this.addInfix("symbol:,",           1,  this.binary(","));
         // assignment
         this.addInfix("symbol:=",           2,  this.parseAssignentExpression);
+        // ternary conditional
+        this.addInfix("symbol:?",           3,  this.parseTernaryConditional);
         // logical or
-        this.addInfix("identifier:or",      3,  this.binary("or"));
+        this.addInfix("identifier:or",      4,  this.binary("or"));
         // logical and
-        this.addInfix("identifier:and",     4,  this.binary("and"));
+        this.addInfix("identifier:and",     5,  this.binary("and"));
         // equality
-        this.addInfix("symbol:==",          5,  this.binary("=="));
-        this.addInfix("symbol:!=",          5,  this.binary("!="));
+        this.addInfix("symbol:==",          6,  this.binary("=="));
+        this.addInfix("symbol:!=",          6,  this.binary("!="));
         // comparison
-        this.addInfix("symbol:<",           6,  this.binary("<"));
-        this.addInfix("symbol:>",           6,  this.binary(">"));
-        this.addInfix("symbol:<=",          6,  this.binary("<="));
-        this.addInfix("symbol:>=",          6,  this.binary(">="));
+        this.addInfix("symbol:<",           7,  this.binary("<"));
+        this.addInfix("symbol:>",           7,  this.binary(">"));
+        this.addInfix("symbol:<=",          7,  this.binary("<="));
+        this.addInfix("symbol:>=",          7,  this.binary(">="));
         // add/sub
-        this.addInfix("symbol:+",           7,  this.binary("+"));
-        this.addInfix("symbol:-",           7,  this.binary("-"));
+        this.addInfix("symbol:+",           8,  this.binary("+"));
+        this.addInfix("symbol:-",           8,  this.binary("-"));
         // mult/div
-        this.addInfix("symbol:/",           8,  this.binary("/"));
-        this.addInfix("symbol:*",           8,  this.binary("*"));
+        this.addInfix("symbol:/",           9,  this.binary("/"));
+        this.addInfix("symbol:*",           9,  this.binary("*"));
         // unary not
-        this.addPrefix("symbol:!",          9,  this.unary("!"));
+        this.addPrefix("symbol:!",          10,  this.unary("!"));
         // unary minus
-        this.addPrefix("symbol:-",          9,  this.unary("minus"));
+        this.addPrefix("symbol:-",          10,  this.unary("minus"));
         // call function
-        this.addInfix("symbol:(",           10, this.parseCallExpression);
+        this.addInfix("symbol:(",           11, this.parseCallExpression);
         // subscript ( computed member )
-        this.addInfix("symbol:[",           10, this.parseSubscriptExpression);
+        this.addInfix("symbol:[",           11, this.parseSubscriptExpression);
         // member
-        this.addInfix("symbol:.",           10, this.parseMemberExpression);
+        this.addInfix("symbol:.",           11, this.parseMemberExpression);
         // grouping
-        this.addPrefix("symbol:(",          11, this.parseGroupingExpression);
+        this.addPrefix("symbol:(",          12, this.parseGroupingExpression);
 
-        this.addPrefix("number:",           12, this.literal("number"));
-        this.addPrefix("string:",           12, this.literal("string"));
-        this.addPrefix("identifier:",       12, this.parseIdentifier);
-        this.addPrefix("identifier:true",   12, this.literal("boolean"));
-        this.addPrefix("identifier:false",  12, this.literal("boolean"));
-        this.addPrefix("identifier:super",  12, this.parseSuperExpression);
+        this.addPrefix("number:",           13, this.literal("number"));
+        this.addPrefix("string:",           13, this.literal("string"));
+        this.addPrefix("identifier:",       13, this.parseIdentifier);
+        this.addPrefix("identifier:true",   13, this.literal("boolean"));
+        this.addPrefix("identifier:false",  13, this.literal("boolean"));
+        this.addPrefix("identifier:super",  13, this.parseSuperExpression);
     }
     parseNotDeclaration (tokens) {
         const stmt = this.parseStatement(tokens);
@@ -1612,6 +1622,15 @@ class LoxParser extends Parser {
                 throw new Error("Invalid assignment target.");
         }
     }
+    parseTernaryConditional (tokens, condition) {
+        const start = tokens.previous().start;
+        const thenExpr = this.parseExpression(tokens, 3);
+        this.ensure(tokens, "symbol::");
+        const elseExpr = this.parseExpression(tokens, 3);
+        const end = elseExpr.end;
+
+        return this.createNode("?", start, end, { condition, thenExpr, elseExpr });
+    }
     parseCallExpression (tokens, left) {
         const start = tokens.previous().start;
         const args = [];
@@ -1855,6 +1874,7 @@ class LoxResolver extends Walker {
         this.defineStatement("blank", noop);
 
         this.defineExpression(",",  this.walkBinaryExpression);
+        this.defineExpression("?",  this.walkConditionalExpression);
         this.defineExpression("or",  this.walkBinaryExpression);
         this.defineExpression("and",  this.walkBinaryExpression);
         this.defineExpression("==",  this.walkBinaryExpression);
@@ -2075,6 +2095,12 @@ class LoxResolver extends Walker {
         this.walkExpression(right, ctx);
 
         ctx.resolveLocal(expr, name);
+    }
+    walkConditionalExpression (expr, ctx) {
+        const { condition, thenExpr, elseExpr } = expr;
+        this.walkExpression(condition, ctx);
+        this.walkExpression(thenExpr, ctx);
+        this.walkExpression(elseExpr, ctx);
     }
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;
