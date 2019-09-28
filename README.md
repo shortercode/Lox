@@ -4,8 +4,6 @@ An implementation of the Lox programming language written in modern JavaScript. 
 Behaviour wise it is intended to match the reference implementation. At the moment it is passing nearly the entire test suite, with only minor variance.
 
 Going forward I intend to implement the following features that are suggested in the "challenges" section of the Crafting interpreters book:
-- ternary conditional operator `... ? ... : ...`
-- sequence operator `..., ...`
 - tail call optimisation
 - static class methods
 - function expressions
