@@ -96,6 +96,7 @@ export default class LoxInterpreter extends Walker {
         this.defineExpression("set", this.walkSetExpression);
         this.defineExpression("computed-set", this.walkComputedSetExpression);
         this.defineExpression("assignment", this.walkAssignmentExpression);
+        this.defineExpression("?",  this.walkConditionalExpression);
         this.defineExpression("call", this.walkCallExpression);
         this.defineExpression("identifier", (expr, ctx) => ctx.get(expr.value, expr));
         this.defineExpression("context", (expr, ctx) => ctx.get(expr.value, expr));
@@ -287,6 +288,13 @@ export default class LoxInterpreter extends Walker {
         ctx.set(name, expr, value);
 
         return value;
+    }
+    walkConditionalExpression (expr, ctx) {
+        const { condition, thenExpr, elseExpr } = expr;
+        if (isTruthy(this.walkExpression(condition, ctx)))
+            return this.walkExpression(thenExpr, ctx);
+        else
+            return this.walkExpression(elseExpr, ctx);
     }
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;

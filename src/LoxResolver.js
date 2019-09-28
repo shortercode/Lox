@@ -22,6 +22,7 @@ export default class LoxResolver extends Walker {
         this.defineStatement("blank", noop);
 
         this.defineExpression(",",  this.walkBinaryExpression);
+        this.defineExpression("?",  this.walkConditionalExpression);
         this.defineExpression("or",  this.walkBinaryExpression);
         this.defineExpression("and",  this.walkBinaryExpression);
         this.defineExpression("==",  this.walkBinaryExpression);
@@ -242,6 +243,12 @@ export default class LoxResolver extends Walker {
         this.walkExpression(right, ctx);
 
         ctx.resolveLocal(expr, name);
+    }
+    walkConditionalExpression (expr, ctx) {
+        const { condition, thenExpr, elseExpr } = expr;
+        this.walkExpression(condition, ctx);
+        this.walkExpression(thenExpr, ctx);
+        this.walkExpression(elseExpr, ctx);
     }
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;
