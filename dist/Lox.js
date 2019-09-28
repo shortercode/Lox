@@ -827,7 +827,7 @@ class Class {
       this.superClass = superClass;
   }
   get (name) {
-    return this.definitions.get(name) || (this.superClass ? this.superClass.get(name) : null);
+    return this.definitions.get(name) || (this.superClass ? this.superClass.get(name) : undefined);
   }
   toString () {
     return this.name;
@@ -1778,7 +1778,7 @@ class NativeFunction extends LoxFunction {
   toString () {
     return "<native fn>";
   }
-  call (args, ctx, walkStmt) {
+  call (args, _ctx, _walkStmt) {
       return this.method(args);
   }
 }
