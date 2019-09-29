@@ -7,6 +7,9 @@ export default class Context {
         this.callStack = null;
         this.printMethod = null;
         this.variableMapping = null;
+
+        this.tailFunction = null;
+        this.tailArguments = null;
     }
     setGlobal (name, value) {
       if (this.global.has(name))
@@ -37,13 +40,31 @@ export default class Context {
            this.printMethod(str);
     }
     callFunction (fn, args, walkStmt) {
-       return fn.call(args, this, walkStmt);      
+        let result = fn.call(args, this, walkStmt);
+       
+        while (this.tailFunction != null) {
+            const fn = this.tailFunction;
+            const args = this.tailArguments;
+            this.tailArguments = null;
+            this.tailFunction = null;
+
+            result = fn.call(args, this, walkStmt);
+        }
+       
+        return result;
     }
     return (value) {
         if (this.callStack === null)
             throw new Error("Invalid return statement");
         else
             this.callStack.return(value);
+    }
+    tailCall (fn, args) {
+        if (this.tailFunction)
+            throw new Error("A tail call is already pending, cannot register another");
+
+        this.tailFunction = fn;
+        this.tailArguments = args;
     }
     shouldReturn () {
         return this.callStack !== null && this.callStack.complete;

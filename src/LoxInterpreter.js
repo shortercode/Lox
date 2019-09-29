@@ -150,7 +150,10 @@ export default class LoxInterpreter extends Walker {
         ctx.set(name, stmt, value);
     }
     walkReturn (stmt, ctx) {
-        ctx.return(this.walkExpression(stmt, ctx));
+        if (stmt.type === "call")
+            ctx.return(this.walkTailCallExpression(stmt.data, ctx));
+        else
+            ctx.return(this.walkExpression(stmt, ctx));
     }
     walkPrint (stmt, ctx) {
         const result = this.walkExpression(stmt, ctx);
@@ -296,6 +299,31 @@ export default class LoxInterpreter extends Walker {
         else
             return this.walkExpression(elseExpr, ctx);
     }
+    walkTailCallExpression (expr, ctx) {
+        const { left, args } = expr;
+        const fn = this.walkExpression(left, ctx);
+
+        const values = args.map(arg => this.walkExpression(arg, ctx));
+
+        if (fn instanceof LoxFunction)
+            return ctx.tailCall(fn, values);
+
+        else if (fn instanceof Class) {
+            const inst = new Instance(fn);
+            const init = inst.get("init", true);
+            
+            if (init)
+                return ctx.tailCall(init, values);
+            else if (values.length > 0)
+                throw new RuntimeError(`Expected 0 arguments but got ${values.length}.`);
+
+            // NOTE this actually skips the tail call, as there is no method to call
+            return inst;
+        }
+
+        else
+            throw new RuntimeError(`Can only call functions and classes.`);
+    }
     walkCallExpression (expr, ctx) {
         const { left, args } = expr;
         const fn = this.walkExpression(left, ctx);
@@ -310,7 +338,7 @@ export default class LoxInterpreter extends Walker {
             const init = inst.get("init", true);
             
             if (init)
-                ctx.callFunction(init, values, this.boundWalkStatement);
+                return ctx.callFunction(init, values, this.boundWalkStatement);
             else if (values.length > 0)
                 throw new RuntimeError(`Expected 0 arguments but got ${values.length}.`);
 
