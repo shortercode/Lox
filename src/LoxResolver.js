@@ -53,6 +53,7 @@ export default class LoxResolver extends Walker {
         this.defineExpression("context", this.walkContextExpression);
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", noop);
+        this.defineExpression("function", this.walkFunction);
     }
     walk (stmt, globals) {
         const ctx = new ResolverContext(globals);

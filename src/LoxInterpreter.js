@@ -102,6 +102,7 @@ export default class LoxInterpreter extends Walker {
         this.defineExpression("context", (expr, ctx) => ctx.get(expr.value, expr));
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", (expr, ctx) => null);
+        this.defineExpression("function", this.walkFunctionExpression);
     }
     walkModule (stmts, ctx) {
         for (const stmt of stmts) {
@@ -360,5 +361,9 @@ export default class LoxInterpreter extends Walker {
         const inst = scope.get("this");
 
         return property.bind(inst);
+    }
+    walkFunctionExpression (expr, ctx) {
+        const { parameters, block, name } = expr;
+        return new LoxFunction(name, parameters, block, ctx.copyScope());
     }
 }
