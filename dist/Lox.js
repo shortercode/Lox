@@ -970,6 +970,7 @@ class LoxInterpreter extends Walker {
         this.defineExpression("context", (expr, ctx) => ctx.get(expr.value, expr));
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", (expr, ctx) => null);
+        this.defineExpression("function", this.walkFunctionExpression);
     }
     walkModule (stmts, ctx) {
         for (const stmt of stmts) {
@@ -1229,6 +1230,10 @@ class LoxInterpreter extends Walker {
 
         return property.bind(inst);
     }
+    walkFunctionExpression (expr, ctx) {
+        const { parameters, block, name } = expr;
+        return new LoxFunction(name, parameters, block, ctx.copyScope());
+    }
 }
 
 const RESERVED_NAMES = new Set([
@@ -1306,6 +1311,7 @@ class LoxParser extends Parser {
         this.addPrefix("identifier:true",   13, this.literal("boolean"));
         this.addPrefix("identifier:false",  13, this.literal("boolean"));
         this.addPrefix("identifier:super",  13, this.parseSuperExpression);
+        this.addPrefix("identifier:fun",    13, this.parseFunctionExpression);
     }
     parseNotDeclaration (tokens) {
         const stmt = this.parseStatement(tokens);
@@ -1733,6 +1739,43 @@ class LoxParser extends Parser {
             name
         });
     }
+    parseFunctionExpression (tokens) {
+        const start = tokens.previous().start;
+        let name = "(anonymous)";
+        if (this.match(tokens, "identifier:"))
+            name = tokens.consume().value;
+            
+        const parameters = [];
+        this.ensure(tokens, "symbol:(");
+
+        if (RESERVED_NAMES.has(name))
+            throw new RuntimeError("Expect function name.");
+
+        while (!this.match(tokens, "symbol:)"))
+        {
+            const param = this.ensure(tokens, "identifier:");
+            parameters.push(param);
+
+            if (this.match(tokens, "symbol:,"))
+                tokens.next();
+            else if (this.match(tokens, "symbol:)"))
+                break;
+            else
+                throw new RuntimeError("Expect ')' after parameters.");
+        }
+
+        this.ensure(tokens, "symbol:)");
+
+        if (this.match(tokens, "symbol:{")) {
+            // tokens.back();
+            const block = this.parseBlock(tokens);
+            const end = tokens.previous().end;
+
+            return this.createNode("function", start, end, { name, parameters, block });
+        }
+        else
+            throw new RuntimeError("Expect '{' before function body.");
+    }
 }
 
 class CallStack {
@@ -1953,6 +1996,7 @@ class LoxResolver extends Walker {
         this.defineExpression("context", this.walkContextExpression);
         this.defineExpression("super", this.walkSuperExpression);
         this.defineExpression("blank", noop);
+        this.defineExpression("function", this.walkFunction);
     }
     walk (stmt, globals) {
         const ctx = new ResolverContext(globals);
