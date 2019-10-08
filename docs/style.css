@@ -1,0 +1,112 @@
+body {
+  margin: 0;
+  background: #2d2d2d;
+  font-family: 'Source Sans Pro', sans-serif;
+}
+
+.header {
+  height: 48px;
+  padding: 8px 16px;
+  background: #1e1f26;
+  font-family: 'Amatic SC', cursive;
+  color: #78a0b9;
+  font-size: 20px;
+}
+.header .logo {
+  font-family: 'Source Sans Pro', sans-serif;
+  display: inline-block;
+  margin-right: 24px;
+  height: 48px;
+  width: 48px;
+  box-sizing: border-box;
+  padding: 4px;
+  line-height: 25px;
+  padding-top: 24px;
+  padding-left: 14px;
+  font-weight: 700;
+  color: white;
+  background: #78a0b9;
+}
+
+.tabber {
+  display: flex;
+  padding: 0 16px;
+  flex-direction: row;
+  justify-content: space-around;
+  padding-top: 8px;
+  background: black;
+}
+.tabber > div {
+  position: relative;
+  padding: 8px 16px;
+  flex: 1;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  color: white;
+  font-size: 14px;
+}
+.tabber > div.active {
+  background: #2d2d2d;
+}
+.tabber > div.active .curve-left {
+  display: inline-block;
+}
+.tabber > div.active .curve-right {
+  display: inline-block;
+}
+.tabber > div .curve-left {
+  position: absolute;
+  left: -8px;
+  bottom: 0px;
+  display: none;
+  height: 8px;
+  width: 8px;
+  background: #2d2d2d;
+}
+.tabber > div .curve-left::before {
+  content: "";
+  display: block;
+  background: black;
+  border-bottom-right-radius: 18px;
+  width: 8px;
+  height: 8px;
+}
+.tabber > div .curve-right {
+  position: absolute;
+  right: -8px;
+  bottom: 0px;
+  display: none;
+  height: 8px;
+  width: 8px;
+  background: #2d2d2d;
+}
+.tabber > div .curve-right::before {
+  content: "";
+  display: block;
+  background: black;
+  border-bottom-left-radius: 8px;
+  width: 8px;
+  height: 8px;
+}
+
+.workspace {
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+.workspace .about {
+  max-width: 1024px;
+  flex: 1;
+  border-radius: 4px;
+  padding: 16px;
+  background: #1e1f26;
+  color: #a0a0a0;
+}
+.workspace .about h2:first-child {
+  margin-top: 0;
+}
+.workspace .about .handwritten {
+  font-family: 'Amatic SC', cursive;
+  color: #78a0b9;
+}
