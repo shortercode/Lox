@@ -1,12 +1,71 @@
 <!DOCTYPE html>
 <html>
   <head>
-    
+    <link href="https://fonts.googleapis.com/css?family=Amatic+SC:700|Source+Sans+Pro:400,700&display=swap" rel="stylesheet">
   </head>
   <body>
-  <h1>Lox*</h1>
-    <p>
-      This the page is a work in progress.
-    </p>
+    <div class="header"><div class="logo">Lox</div> Unofficial tools</div>
+    <div class="tabber">
+      <div>
+        <div class="curve-left"></div>
+        Code
+        <div class="curve-right"></div>
+      </div>
+      <div>
+        <div class="curve-left"></div>
+        AST
+        <div class="curve-right"></div>
+      </div>
+      <div>
+        <div class="curve-left"></div>
+        Console
+        <div class="curve-right"></div>
+      </div>
+      <div>
+        <div class="curve-left"></div>
+        About
+        <div class="curve-right"></div>
+      </div>
+    </div>
+    <div class="workspace">
+      <!-- Code editor with syntax highlighting-->
+      <div class="code-editor">
+
+      </div>
+      <!-- AST view -->
+      <div class="ast-viewer">
+
+      </div>
+      <!-- Console output from running the code -->
+      <div class="console">
+
+      </div>
+      <!-- About this toolkit -->
+      <div class="about">
+        <h2>Welcome</h2>
+        <p>to the unofficial toolkit for the Lox programming language.</p>
+        <h2>What is Lox?</h2>
+        <p>Lox is a programming language devised by Robert Nystrom for the book <a class="handwritten" href="">"Crafting Interpreters"</a>. It's dynamically typed, classy and I think pretty neat. Here's a little snippet:</p>
+        <pre class="code" type="lox">
+          class Breakfast {
+            init(meat, bread) {
+              this.meat = meat;
+              this.bread = bread;
+            }
+
+            // ...
+          }
+          class Brunch < Breakfast {
+            init(meat, bread, drink) {
+              super.init(meat, bread);
+              this.drink = drink;
+            }
+          }
+          var benedict = Brunch("ham", "English muffin");
+          benedict.serve("Noble Reader");
+        </pre>
+        <h2>So 
+      </div>
+    </div>
   </body>
 </html>
